@@ -9,10 +9,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace MarikinaMarket.API.Migrations
+namespace MarikinaMarket.API.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260706095007_InitialCreate")]
+    [Migration("20260707104326_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -734,6 +734,10 @@ namespace MarikinaMarket.API.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
 
+                    b.HasIndex("UserName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asp_net_users_user_name");
+
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
@@ -762,8 +766,7 @@ namespace MarikinaMarket.API.Migrations
 
                     b.Property<string>("QrCodeValue")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
+                        .HasColumnType("text")
                         .HasColumnName("qr_code_value");
 
                     b.Property<DateTime>("RegisteredAt")
@@ -796,6 +799,10 @@ namespace MarikinaMarket.API.Migrations
                     b.HasKey("Id")
                         .HasName("pk_vendor_profiles");
 
+                    b.HasIndex("QrCodeValue")
+                        .IsUnique()
+                        .HasDatabaseName("ix_vendor_profiles_qr_code_value");
+
                     b.HasIndex("UserId")
                         .IsUnique()
                         .HasDatabaseName("ix_vendor_profiles_user_id");
@@ -820,6 +827,11 @@ namespace MarikinaMarket.API.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("business_document_photo_url");
+
+                    b.Property<string>("BusinessName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("business_name");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -861,11 +873,11 @@ namespace MarikinaMarket.API.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("middle_name");
 
-                    b.Property<string>("PasswordHash")
+                    b.Property<string>("Password")
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
-                        .HasColumnName("password_hash");
+                        .HasColumnName("password");
 
                     b.Property<DateTime>("RequestedAt")
                         .ValueGeneratedOnAdd()
@@ -880,6 +892,13 @@ namespace MarikinaMarket.API.Migrations
                     b.Property<int?>("ReviewedBy")
                         .HasColumnType("integer")
                         .HasColumnName("reviewed_by");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
 
                     b.Property<string>("Status")
                         .IsRequired()

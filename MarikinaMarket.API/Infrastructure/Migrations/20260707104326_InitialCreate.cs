@@ -6,7 +6,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
-namespace MarikinaMarket.API.Migrations
+namespace MarikinaMarket.API.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -239,15 +239,17 @@ namespace MarikinaMarket.API.Migrations
                     government_id_number = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     government_id_photo_url = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
                     business_document_photo_url = table.Column<string>(type: "text", nullable: false),
+                    business_name = table.Column<string>(type: "text", nullable: false),
                     first_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     middle_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     last_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     email = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    password_hash = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
+                    password = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
                     status = table.Column<string>(type: "text", nullable: false),
                     requested_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
                     reviewed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    reviewed_by = table.Column<int>(type: "integer", nullable: true)
+                    reviewed_by = table.Column<int>(type: "integer", nullable: true),
+                    row_version = table.Column<byte[]>(type: "bytea", rowVersion: true, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -272,7 +274,7 @@ namespace MarikinaMarket.API.Migrations
                     stall_number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     compliance_score = table.Column<int>(type: "integer", nullable: false),
                     score_updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
-                    qr_code_value = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    qr_code_value = table.Column<string>(type: "text", nullable: false),
                     status = table.Column<string>(type: "text", nullable: false),
                     registered_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())")
                 },
@@ -505,6 +507,12 @@ namespace MarikinaMarket.API.Migrations
                 column: "normalized_email");
 
             migrationBuilder.CreateIndex(
+                name: "ix_asp_net_users_user_name",
+                table: "AspNetUsers",
+                column: "user_name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "UserNameIndex",
                 table: "AspNetUsers",
                 column: "normalized_user_name",
@@ -574,6 +582,12 @@ namespace MarikinaMarket.API.Migrations
                 name: "ix_vendor_profiles_market_section_id_stall_number",
                 table: "vendor_profiles",
                 columns: new[] { "market_section_id", "stall_number" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_vendor_profiles_qr_code_value",
+                table: "vendor_profiles",
+                column: "qr_code_value",
                 unique: true);
 
             migrationBuilder.CreateIndex(
