@@ -11,11 +11,14 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         public Task<IdentityResult> CreateUserAsync(User user, string password);
         public Task<IdentityResult> CreateUserWithPassAsync(User user);
         public Task<SignInResult> CheckPasswordAsync(User user, string password);
-        public Task AddToRoleAsync(User user, string role);
+        public Task<IdentityResult> AddToRoleAsync(User user, string role);
         public Task<Role?> GetRoleAsync(User user);
-        public Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refreshToken);
+        public Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refresshToken);
         public Task<RefreshToken?> GetRefreshTokenAsync(string refreshToken);
         public Task<string> GetNextUserNameAsync();
+        public Task<User?> GetUserAsync(int userId);
+        public Task<IdentityResult> UpdateUserAsync(User user);
+        public Task<IdentityResult> ChangePasswordAsync(User user, string oldPassword, string newPassword);
         public Task SaveChangesAsync();
     }
 }

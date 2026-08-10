@@ -48,9 +48,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             return await _signInManager.CheckPasswordSignInAsync(user, password, true);
         }
 
-        public async Task AddToRoleAsync(User user, string role)
+        public async Task<IdentityResult> AddToRoleAsync(User user, string role)
         {
-            await _userManager.AddToRoleAsync(user, role);
+            return await _userManager.AddToRoleAsync(user, role);
         }
 
         public async Task<Role?> GetRoleAsync(User user)
@@ -70,7 +70,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<RefreshToken?> GetRefreshTokenAsync(string refreshToken)
         {
-            return await _context.RefreshTokens.FirstOrDefaultAsync(r => r.Token == refreshToken);
+            return await _context.RefreshTokens
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(r => r.Token == refreshToken);
         }
 
         public async Task SaveChangesAsync()
@@ -94,5 +96,12 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
             return rawNextValue.ToString("D4");
         }
+
+        public async Task<User?> GetUserAsync(int userId) => await _userManager.FindByIdAsync(userId.ToString());
+
+        public async Task<IdentityResult> UpdateUserAsync(User user) => await _userManager.UpdateAsync(user);
+
+        public async Task<IdentityResult> ChangePasswordAsync(User user, string oldPassword, string newPassword)
+            => await _userManager.ChangePasswordAsync(user, oldPassword, newPassword);
     }
 }

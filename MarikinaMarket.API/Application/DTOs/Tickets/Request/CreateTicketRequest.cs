@@ -1,5 +1,5 @@
 ﻿using MarikinaMarket.API.Domain.Enums;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
@@ -7,49 +7,41 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Request
 {
     public class CreateTicketRequest
     {
-        [Required(ErrorMessage = "Control number is required.")]
-        [MaxLength(5), MinLength(5)]
-        public required string ControlNumber { get; set; }
-
+        [FromForm(Name = "vendor_id")]
         [Required(ErrorMessage = "Vendor's information is required.")]
         [Range(1, int.MaxValue, ErrorMessage = "Vendor's information is required.")]
         public int VendorId { get; set; }
 
+        [FromForm(Name = "market_section_id")]
         [Required(ErrorMessage = "Market section is required.")]
         public int MarketSectionId { get; set; }
 
+        [FromForm(Name = "enforcer_id")]
         [Required(ErrorMessage = "Enforcer's information is required.")]
         public int EnforcerId { get; set; }
 
+        [FromForm(Name = "type")]
         [Required(ErrorMessage = "Ticket type is required.")]
         [JsonConverter(typeof(JsonStringEnumConverter))]
-        public TicketType Type { get; set; }
+        public ViolationType Type { get; set; }
 
+        [FromForm(Name = "description")]
         [Required(ErrorMessage = "Description is required.")]
         public required string Description { get; set; }
 
-        [Required(ErrorMessage = "Severity is required.")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public Severity HighestSeverity { get; set; }
-
+        [FromForm(Name = "penalty_type")]
         [Required(ErrorMessage = "Penalty type is required.")]
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public PenaltyType PenaltyType { get; set; }
 
+        [FromForm(Name = "community_service_hours")]
         public int? CommunityServiceHours { get; set; }
 
-        [Required(ErrorMessage = "Primary category is required.")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public ViolationCategory PrimaryCategory { get; set; }
-
-        [Required(ErrorMessage = "Issued ticket date is required.")]
-        public DateTime IssuedAt { get; set; }
-
+        [FromForm(Name = "ordinances")]
         [Required(ErrorMessage = "At least one ordinance is required..")]
         public required List<int> Ordinances { get; set; } = [];
 
-        [Required]
-        [MinLength(1, ErrorMessage = "Ticket evidence is required.")]
-        public List<TicketEvidenceItem> TicketEvidenceUrls { get; set; } = [];
+        [FromForm(Name = "ticket_evidence_files")]
+        public List<IFormFile> TicketEvidenceFiles { get; set; } = [];
     }
 }

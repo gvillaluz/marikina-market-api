@@ -7,5 +7,6 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
     {
         public Task<List<OrdinanceOffenseSummary>> GetByIdsAsync(List<int> ordinanceIds, int vendorId);
         //public Task<List<OrdinancePenaltyTier>> GetPenaltyTiersAsync(List<int> ordinanceTiers);
+        public Task<List<Ordinance>> GetOrdinances();
     }
 }

@@ -61,6 +61,8 @@ namespace MarikinaMarket.API.Application.Services
                 MiddleName = request.MiddleName,
                 Email = request.Email,
                 Password = hashedPassword,
+                StallNumber = request.StallNumber,
+                MarketSectionId = request.MarketSectionId,
                 Status = RequestStatus.Pending
             };
 
@@ -113,12 +115,6 @@ namespace MarikinaMarket.API.Application.Services
                     throw new Exception("Failed to create user account.");
 
                 /*
-                    Market Section Id is missing.
-                    Verify if vendors choose their sections or not.
-
-                    Stall number is missing.
-                    Verify if vendors choose their stalls or not.
-
                     Update the response properties when the web app wireframe is created.
 
                     Fix the RowVersion checking or querying.
@@ -126,11 +122,7 @@ namespace MarikinaMarket.API.Application.Services
                     July 7, 2026
                  */
 
-
-                int tempMarketSectionId = 1;
-                string tempStallNumber = "TEMP-01";
-
-                var marketSection = await _marketSectionRepository.GetById(tempMarketSectionId);
+                var marketSection = await _marketSectionRepository.GetById(registration.MarketSectionId);
 
                 if (marketSection is null)
                     throw new Exception("Failed to find selected market section.");
@@ -140,7 +132,7 @@ namespace MarikinaMarket.API.Application.Services
                     UserId = newUser.Id,
                     MarketSectionId = marketSection.Id,
                     BusinessName = registration.BusinessName,
-                    StallNumber = tempStallNumber,
+                    StallNumber = registration.StallNumber,
                     QrCodeValue = GenerateUniqueQrToken()
                 };
 
@@ -176,6 +168,46 @@ namespace MarikinaMarket.API.Application.Services
         {
             var bytes = RandomNumberGenerator.GetBytes(16);
             return Convert.ToHexString(bytes).ToLowerInvariant();
+        }
+
+        public async Task<List<GetVendorResponse>> GetVendorByStallNumberAsync(string stallNumber)
+        {
+            var vendors = await _vendorRepository.GetVendorByStallNumber(stallNumber);
+
+            return vendors
+                .Select(v => new GetVendorResponse
+                {
+                    VendorId = v.VendorId,
+                    StallNumber = v.StallNumber,
+                    TradeName = v.TradeName,
+                    LastName = v.LastName,
+                    FirstName = v.FirstName,
+                    MiddleName = v.MiddleName,
+                    Address = "",
+                    MarketSectionId = v.MarketSectionId,
+                    MarketSectionName = v.MarketSectionName
+                }).ToList();
+        }
+
+        public async Task<GetVendorResponse> GetVendorByQrCode(string qrCode)
+        {
+            var vendor = await _vendorRepository.GetVendorByQrCode(qrCode);
+
+            if (vendor == null)
+                throw new RecordNotFoundException("Vendor not found.");
+
+            return new GetVendorResponse
+            {
+                VendorId = vendor.VendorId,
+                StallNumber = vendor.StallNumber,
+                TradeName = vendor.TradeName,
+                LastName = vendor.LastName,
+                FirstName = vendor.FirstName,
+                MiddleName = vendor.MiddleName,
+                Address = "",
+                MarketSectionId = vendor.MarketSectionId,
+                MarketSectionName = vendor.MarketSectionName
+            };
         }
     }
 }

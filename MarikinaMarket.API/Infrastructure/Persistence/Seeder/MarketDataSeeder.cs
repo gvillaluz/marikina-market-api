@@ -127,6 +127,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
                 {
                     Id = 1,
                     OrdinanceNo = "Ord. No. 11, Series of 2014",
+                    Code = "Market Code",
                     Title = "Revised Marikina Market Code of 2014 " +
                                   "— Stall Boundary and Walkway Violations",
                     Description = "Sections 42, 47, and 53 of the Revised " +
@@ -154,6 +155,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
                 {
                     Id = 2,
                     OrdinanceNo = "Ord. No. 145, Series of 2006",
+                    Code = "Peace & Order Code",
                     Title = "Revised Marikina Peace, Order, Public " +
                                   "Safety and Security Code of 2006",
                     Description = "Section 32 of the Revised Marikina Peace, " +
@@ -185,6 +187,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
                 {
                     Id = 3,
                     OrdinanceNo = "Ord. No. 104, Series of 2007",
+                    Code = "Market I.D.",
                     Title = "Ordinance Amending Section 12 of the " +
                                   "Marikina Market Code — Market Identification " +
                                   "Card Requirements",
@@ -212,6 +215,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
                 {
                     Id = 4,
                     OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VIII",
+                    Code = "Market Code",
                     Title = "Revised Marikina Market Code of 2014 " +
                                   "— Sanitation and Cleanliness Standards",
                     Description = "Chapter VIII (Sections 66–75) of the Revised " +
@@ -242,6 +246,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
                 {
                     Id = 5,
                     OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VI",
+                    Code = "Market Code",
                     Title = "Revised Marikina Market Code of 2014 " +
                                   "— Weights and Measures Compliance",
                     Description = "Chapter VI, Section 30 of the Revised " +

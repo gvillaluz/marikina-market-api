@@ -16,6 +16,11 @@ namespace MarikinaMarket.API.Domain.Entities
         public required string LastName { get; set; }
         public required string Email { get; set; }
         public required string Password { get; set; }
+        public required string StallNumber { get; set; }
+
+        public required int MarketSectionId { get; set; }
+        public MarketSection? MarketSection { get; set; }
+
         public RequestStatus Status { get; set; }
         public DateTime RequestedAt {  get; set; } = DateTime.UtcNow;
         public DateTime? ReviewedAt { get; set; }

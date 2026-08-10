@@ -42,5 +42,11 @@ namespace MarikinaMarket.API.Application.DTOs.User.Request
         [Required(ErrorMessage = "Password is required.")]
         [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters.")]
         public required string Password { get; set; }
+
+        [Required(ErrorMessage = "Stall number is required.")]
+        public required string StallNumber { get; set; }
+
+        [Required(ErrorMessage = "Market section is required.")]
+        public required int MarketSectionId { get; set; }
     }
 }

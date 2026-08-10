@@ -12,6 +12,6 @@
 
         public int OffenseCount { get; set; }
 
-        public decimal PenaltyAmount { get; set; }
+        public decimal? PenaltyAmount { get; set; }
     }
 }

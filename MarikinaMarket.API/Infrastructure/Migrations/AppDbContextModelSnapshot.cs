@@ -133,6 +133,11 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("category");
 
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -171,6 +176,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 1,
                             Category = "Obstruction",
+                            Code = "Market Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Sections 42, 47, and 53 of the Revised Marikina Market Code of 2014 (amending Ordinance No. 149, Series of 1999) prohibit peddling or hawking in passageways, placing items on corridors and walkways, and conducting any vending activities on streets and sidewalks within the Marikina Public Market Zone. Stall holders must strictly observe their designated stall boundaries at all times.",
                             OrdinanceNo = "Ord. No. 11, Series of 2014",
@@ -180,6 +186,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 2,
                             Category = "Noise",
+                            Code = "Peace & Order Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Section 32 of the Revised Marikina Peace, Order, Public Safety and Security Code of 2006 regulates noise and revelries within the City. Audio-amplified equipment such as stereos, karaokes, videoke, and similar musical devices shall not play beyond normally accepted sound modulation after 10:00 PM. Market vendors are additionally prohibited from using sidewalks and streets as extensions of their stalls under Section 5, subject to fine of P1,000 and confiscation of goods. Alternative penalties including blood donation (for fines not exceeding P1,000) and community service are authorized under Appendix B.",
                             OrdinanceNo = "Ord. No. 145, Series of 2006",
@@ -189,6 +196,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 3,
                             Category = "Licensing",
+                            Code = "Market I.D.",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Ordinance No. 104, Series of 2007 amends Section 12 of the Marikina Market Code requiring all vendors and helpers in public and private markets within the City of Marikina to secure and display a valid Market Identification Card at all times. The Market ID costs Seventy-Five Pesos (P75.00) and must be renewed annually. Operating without a valid Market ID or business permit constitutes a violation subject to penalties under Section 79 of the Market Code of 2014.",
                             OrdinanceNo = "Ord. No. 104, Series of 2007",
@@ -198,6 +206,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 4,
                             Category = "Sanitation",
+                            Code = "Market Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Chapter VIII (Sections 66–75) of the Revised Marikina Market Code of 2014 governs the maintenance of market premises and sanitation standards. Stallholders must keep stalls clean at all times, use impervious materials on counters and walls per Section 72, protect cooked and raw foods from contamination per Section 70, clean stalls at the end of each business day per Section 73, and properly dispose of garbage per Section 69. All food eatery owners must complete Food Safety and Personal Hygiene Training per Section 14. A fine of One Thousand Pesos (P1,000.00) is imposed per violation. Third violation results in cancellation of license.",
                             OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VIII",
@@ -207,6 +216,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 5,
                             Category = "WeightMeasures",
+                            Code = "Market Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Chapter VI, Section 30 of the Revised Marikina Market Code of 2014 (amending Ordinance No. 160, Series of 2001 and Ordinance No. 283, Series of 1997) prohibits the use of underweight scales, placement of concealed materials in weighing scales, and any manipulation that reflects a weight other than the true weight of goods. All weighing devices must be registered with the City Treasury and submitted for annual re-inspection. Confiscated scales must be redeemed within five (5) working days. A specific graduated penalty schedule applies independently from the general market code penalties.",
                             OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VI",
@@ -453,6 +463,11 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int[]>("Categories")
+                        .IsRequired()
+                        .HasColumnType("integer[]")
+                        .HasColumnName("categories");
+
                     b.Property<int?>("CommunityServiceHours")
                         .HasColumnType("integer")
                         .HasColumnName("community_service_hours");
@@ -473,7 +488,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnName("enforcer_id");
 
                     b.Property<string>("HighestSeverity")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("highest_severity");
 
@@ -493,14 +507,8 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnName("payment_status");
 
                     b.Property<string>("PenaltyType")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("penalty_type");
-
-                    b.Property<string>("PrimaryCategory")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("primary_category");
 
                     b.Property<string>("ReceiptUrl")
                         .HasMaxLength(1000)
@@ -512,7 +520,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("status");
 
-                    b.Property<decimal>("TotalPaymentAmount")
+                    b.Property<decimal?>("TotalPaymentAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("total_payment_amount");
@@ -543,8 +551,8 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.HasIndex("MarketSectionId")
                         .HasDatabaseName("ix_tickets_market_section_id");
 
-                    b.HasIndex("VendorId", "PrimaryCategory", "IssuedAt")
-                        .HasDatabaseName("ix_tickets_vendor_id_primary_category_issued_at");
+                    b.HasIndex("VendorId", "Categories", "IssuedAt")
+                        .HasDatabaseName("ix_tickets_vendor_id_categories_issued_at");
 
                     b.ToTable("tickets", (string)null);
                 });
@@ -557,10 +565,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CapturedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("captured_at");
 
                     b.Property<string>("EvidenceUrl")
                         .IsRequired()
@@ -598,7 +602,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("ordinance_id");
 
-                    b.Property<decimal>("PenaltyAmount")
+                    b.Property<decimal?>("PenaltyAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("penalty_amount");
@@ -865,6 +869,10 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("last_name");
 
+                    b.Property<int>("MarketSectionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("market_section_id");
+
                     b.Property<string>("MiddleName")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -897,6 +905,11 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("bytea")
                         .HasColumnName("row_version");
 
+                    b.Property<string>("StallNumber")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("stall_number");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text")
@@ -908,6 +921,9 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .IsUnique()
                         .HasDatabaseName("ix_vendor_registration_requests_email");
+
+                    b.HasIndex("MarketSectionId")
+                        .HasDatabaseName("ix_vendor_registration_requests_market_section_id");
 
                     b.HasIndex("ReviewedBy")
                         .HasDatabaseName("ix_vendor_registration_requests_reviewed_by");
@@ -960,8 +976,8 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 2,
                             ConcurrencyStamp = "b83c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
-                            Name = "Inspector",
-                            NormalizedName = "INSPECTOR"
+                            Name = "Enforcer",
+                            NormalizedName = "ENFORCER"
                         },
                         new
                         {
@@ -1212,11 +1228,20 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.VendorRegistrationRequest", b =>
                 {
+                    b.HasOne("MarikinaMarket.API.Domain.Entities.MarketSection", "MarketSection")
+                        .WithMany()
+                        .HasForeignKey("MarketSectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_vendor_registration_requests_market_sections_market_section");
+
                     b.HasOne("MarikinaMarket.API.Domain.Entities.User", "ReviewedByUser")
                         .WithMany("ReviewedVendorRegistrationRequests")
                         .HasForeignKey("ReviewedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_vendor_registration_requests_asp_net_users_reviewed_by");
+
+                    b.Navigation("MarketSection");
 
                     b.Navigation("ReviewedByUser");
                 });

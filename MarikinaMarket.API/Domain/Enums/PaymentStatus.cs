@@ -2,6 +2,7 @@
 {
     public enum PaymentStatus
     {
+        NotApplicable,
         Pending,
         Paid,
         Overdue,

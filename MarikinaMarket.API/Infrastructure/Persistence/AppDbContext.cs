@@ -41,8 +41,8 @@ namespace MarikinaMarket.API.Infrastructure.Persistence
                 new IdentityRole<int>
                 {
                     Id = 2,
-                    Name = "Inspector",
-                    NormalizedName = "INSPECTOR",
+                    Name = "Enforcer",
+                    NormalizedName = "ENFORCER",
                     ConcurrencyStamp = "b83c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
                 },
                 new IdentityRole<int>

@@ -4,6 +4,7 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Security.Claims;
 
 namespace MarikinaMarket.API.Presentation.Controllers
@@ -14,59 +15,77 @@ namespace MarikinaMarket.API.Presentation.Controllers
     public class TicketController : ControllerBase
     {
         private readonly ITicketService _service;
-        public TicketController(ITicketService service)
-        {
-            _service = service;
-        }
+        public TicketController(ITicketService service) => _service = service;
 
         [HttpGet("{id}")]
-        public IActionResult GetTicketById(int id)
+        [Authorize]
+        public async Task<IActionResult> GetTicketById([FromRoute] int id)
         {
             if (id <= 0)
-                return NotFound(new { message = "TANGINA WALA" });
+                return BadRequest("Ticket identification must not be empty.");
 
-            return Ok(new { message = "TANGINA" });
+            return Ok(await _service.GetTicketDetailByIdAsync(id));
         }
 
-        [HttpPost]
+        [HttpPost("new-inspection")]
         [Authorize(Roles = nameof(Role.Enforcer))]
-        public async Task<ActionResult<TicketDetailResponse>> CreateTicket([FromBody] CreateTicketRequest request)
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<InspectionSummaryResponse>> SaveNewInspection([FromForm] CreateTicketRequest request)
         {
-            try
-            {
-                if (request == null) return BadRequest("Request body must not be null or empty.");
+            if (request == null) return BadRequest("Request body must not be null or empty.");
 
-                var ticketResponse = await _service.CreateTicketAsync(request);
-
-                return CreatedAtAction(nameof(GetTicketById), new { id = ticketResponse.Id }, ticketResponse);
-            }
-            catch (Exception ex)
+            foreach (var file in request.TicketEvidenceFiles)
             {
-                return Unauthorized(ex.Message);
+                Console.WriteLine($"FILE: {file.FileName}");
             }
+
+            var ticketResponse = await _service.CreateTicketAsync(request);
+
+            return CreatedAtAction(nameof(GetTicketById), new { id = ticketResponse.Id }, ticketResponse);  
+        }
+
+        [HttpGet("enforcer/inspections")]
+        [Authorize(Roles = nameof(Role.Enforcer))]
+        public async Task<ActionResult<PageResponse<InspectionSummaryResponse>>> GetAllInspectionsByEnforcerId(
+            [FromQuery] int offset = 0,
+            [FromQuery] ViolationType type = ViolationType.Warning
+            )
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim))
+                return Unauthorized("Invalid token.");
+
+            int enforcerId = int.Parse(userIdClaim);
+
+            return Ok(await _service.GetInspectionsByEnforcerIdAsync(enforcerId, offset, type));
         }
 
         [HttpGet("enforcer/tickets")]
         [Authorize(Roles = nameof(Role.Enforcer))]
-        public async Task<ActionResult<List<TicketDetailResponse>>> GetAllTicketsByEnforcerId()
+        public async Task<ActionResult<PageResponse<TicketSummaryResponse>>> GetAllTicketsByEnforcerId(
+            [FromQuery] int offset = 0,
+            [FromQuery] TicketStatus status = TicketStatus.Active
+            )
         {
-            try
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-                if (string.IsNullOrEmpty(userIdClaim))
-                    return Unauthorized("Invalid token.");
+            if (string.IsNullOrEmpty(userIdClaim))
+                return Unauthorized("Invalid token.");
 
-                int enforcerId = int.Parse(userIdClaim);
+            int enforcerId = int.Parse(userIdClaim);
 
-                var tickets = await _service.GetAllByEnforcerId(enforcerId);
+            return Ok(await _service.GetTicketsByEnforcerIdAsync(enforcerId, offset, status));
+        }
 
-                return tickets;
-            }
-            catch (Exception ex)
-            {
-                return Unauthorized(ex.Message);
-            }
+        [HttpPost("fine-summary")]
+        [Authorize(Roles = nameof(Role.Enforcer))]
+        public async Task<ActionResult<FineSummaryResponse>> GetTicketFineSummary([FromBody] FineSummaryRequest request)
+        {
+            if (!request.OrdinanceIds.Any() || request.VendorId <= 0)
+                return BadRequest("Ordinance and vendor must not be empty.");
+
+            return Ok(await _service.GetOffenseCountsAndPaymentBy(request.OrdinanceIds, request.VendorId));
         }
     }
 }

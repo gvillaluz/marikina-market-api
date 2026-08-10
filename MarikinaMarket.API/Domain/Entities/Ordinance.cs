@@ -6,6 +6,7 @@ namespace MarikinaMarket.API.Domain.Entities
     {
         public int Id { get; set; }
         public required string OrdinanceNo { get; set; }
+        public required string Code { get; set; }
         public required string Title { get; set; }
         public required string Description { get; set; }
         public ViolationCategory Category { get; set; }

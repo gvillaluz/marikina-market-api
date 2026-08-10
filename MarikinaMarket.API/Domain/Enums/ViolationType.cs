@@ -1,8 +1,8 @@
 ﻿namespace MarikinaMarket.API.Domain.Enums
 {
-    public enum TicketType
+    public enum ViolationType
     {
         Warning,
-        Violation
+        Ticket
     }
 }

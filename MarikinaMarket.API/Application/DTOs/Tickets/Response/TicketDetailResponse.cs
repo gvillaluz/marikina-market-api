@@ -1,20 +1,30 @@
-﻿using MarikinaMarket.API.Domain.Enums;
+﻿using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
+using MarikinaMarket.API.Domain.Entities;
+using MarikinaMarket.API.Domain.Enums;
 
 namespace MarikinaMarket.API.Application.DTOs.Tickets.Response
 {
     public class TicketDetailResponse
     {
-        public required int Id { get; init; }
-        public required string ControlNumber { get; init; }
-        public required int VendorId { get; init; }
-        public required string BusinessName { get; init; }
-        public required int MarketSectionId { get; init; }
-        public required string MarketSectionName { get; init; }
-        public required int EnforcerId { get; init; }
-        public required TicketType Type { get; init; }
-        public required TicketStatus Status { get; init; }
-        public required DateTime IssuedAt { get; init; }
-        public bool IsOverdue { get; init; }
-        public DateTime UpdatedAt { get; init; }
+        public int TicketId { get; set; }
+        public int EnforcerId { get; set; }
+        public int VendorId { get; set; }
+        public string? ControlNumber { get; set; }
+        public ViolationType Type { get; set; }
+        public required string StallNumber { get; set; }
+        public required string BusinessName { get; set; }
+        public required string LastName { get; set; }
+        public required string FirstName { get; set; }
+        public required string Address { get; set; }
+        public List<TicketViolationSummary> Violations { get; set; } = [];
+        public DateTime IssuedAt { get; set; }
+        public required string MarketSectionName { get; set; }
+        public List<ViolationCategory> Categories { get; set; } = [];
+        public required string Description { get; set; }
+        public Severity? Severity { get; set; }
+        public PenaltyType? PenaltyType { get; set; }
+        public DateTime? DueDate { get; set; }
+        public decimal? TotalFineAmount { get; set; }
+        public List<String>? TicketEvidences { get; set; } = [];
     }
 }

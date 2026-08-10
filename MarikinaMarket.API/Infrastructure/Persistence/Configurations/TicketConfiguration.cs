@@ -8,10 +8,10 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<Ticket> builder)
         {
-            builder.Property(x => x.PrimaryCategory)
+            builder.Property(x => x.Categories)
                 .HasConversion<string>();
 
-            builder.HasIndex(x => new { x.VendorId, x.PrimaryCategory, x.IssuedAt });
+            builder.HasIndex(x => new { x.VendorId, x.Categories, x.IssuedAt });
 
             builder.HasIndex(x => x.ControlNumber)
                 .IsUnique();

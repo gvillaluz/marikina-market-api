@@ -1,6 +1,7 @@
 ﻿using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Domain.Entities;
+using MarikinaMarket.API.Domain.Enums;
 using MarikinaMarket.API.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,9 +20,12 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Select(v => new VendorTicketSummary
                 {
                     Id = v.Id,
+                    LastName = v.User!.LastName,
+                    FirstName = v.User.FirstName,
                     MarketSectionId = v.MarketSectionId,
                     MarketSectionName = v.MarketSection!.Name,
-                    BusinessName = v.BusinessName
+                    BusinessName = v.BusinessName,
+                    StallNumber = v.StallNumber
                 })
                 .FirstOrDefaultAsync();
         }
@@ -55,6 +59,44 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 Console.WriteLine(ex.Message);
                 throw new Exception("A database error occured while saving the changes.");
             }
+        }
+
+        public async Task<List<VendorLookupResult>> GetVendorByStallNumber(string stallNumber)
+        {
+            return await _context.VendorProfiles
+                .Where(v => v.StallNumber == stallNumber && v.Status == VendorStatus.Active)
+                .Select(v => new VendorLookupResult
+                {
+                    VendorId = v.Id,
+                    StallNumber = v.StallNumber,
+                    TradeName = v.BusinessName,
+                    LastName = v.User.LastName,
+                    FirstName = v.User.FirstName,
+                    MiddleName = v.User.MiddleName,
+                    Address = "",
+                    MarketSectionId = v.MarketSectionId,
+                    MarketSectionName = v.MarketSection.Name
+                })
+                .ToListAsync();
+        }
+
+        public async Task<VendorLookupResult?> GetVendorByQrCode(string codeValue)
+        {
+            return await _context.VendorProfiles
+                .Where(v => v.QrCodeValue == codeValue && v.Status == VendorStatus.Active)
+                .Select(v => new VendorLookupResult
+                {
+                    VendorId = v.Id,
+                    StallNumber = v.StallNumber,
+                    TradeName = v.BusinessName,
+                    LastName = v.User.LastName,
+                    FirstName = v.User.FirstName,
+                    MiddleName = v.User.MiddleName,
+                    Address = "",
+                    MarketSectionId = v.MarketSectionId,
+                    MarketSectionName = v.MarketSection.Name
+                })
+                .FirstOrDefaultAsync();
         }
     }
 }

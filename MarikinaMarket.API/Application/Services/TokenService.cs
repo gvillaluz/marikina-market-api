@@ -35,13 +35,12 @@ namespace MarikinaMarket.API.Application.Services
 
             var claims = new Dictionary<string, object>
             {
-                [ClaimTypes.NameIdentifier] = user.Id.ToString(),
-                [ClaimTypes.Email] = user.Email
+                [ClaimTypes.NameIdentifier] = user.Id
             };
 
             if (roles.Any())
             {
-                claims[ClaimTypes.Role] = roles.ToArray();
+                claims["role"] = roles.First();
             }
 
             return handler.CreateToken(new SecurityTokenDescriptor

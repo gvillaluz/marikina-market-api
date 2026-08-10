@@ -1,6 +1,7 @@
 ﻿using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Domain.Entities;
+using MarikinaMarket.API.Domain.Enums;
 using MarikinaMarket.API.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,6 +23,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Select(o => new OrdinanceOffenseSummary
                 {
                     OrdinanceId = o.Id,
+                    OrdinanceNo = o.OrdinanceNo,
+                    Code = o.Code,
                     Title = o.Title,
                     Category = o.Category,
                     PenaltyTiers = o.PenaltyTiers
@@ -35,6 +38,14 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     OffenseCount = o.TicketViolations
                         .Count(tv => tv.Ticket!.VendorId == vendorId)
                 })
+                .ToListAsync();
+        }
+
+        public async Task<List<Ordinance>> GetOrdinances()
+        {
+            return await _context.Ordinances
+                .Include(o => o.PenaltyTiers)
+                .AsNoTracking()
                 .ToListAsync();
         }
     }
