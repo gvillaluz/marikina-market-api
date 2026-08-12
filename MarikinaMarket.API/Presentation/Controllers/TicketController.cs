@@ -17,6 +17,20 @@ namespace MarikinaMarket.API.Presentation.Controllers
         private readonly ITicketService _service;
         public TicketController(ITicketService service) => _service = service;
 
+        [HttpGet("enforcer/dashboard")]
+        [Authorize(Roles = nameof(Role.Enforcer))]
+        public async Task<ActionResult<MobileDashboardSummaryResponse>> GetMobileDashboardSummary()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim))
+                return Unauthorized("Invalid token.");
+
+            int enforcerId = int.Parse(userIdClaim);
+
+            return Ok(await _service.GetMobileTicketCountAsync(enforcerId));
+        }
+
         [HttpGet("{id}")]
         [Authorize]
         public async Task<IActionResult> GetTicketById([FromRoute] int id)

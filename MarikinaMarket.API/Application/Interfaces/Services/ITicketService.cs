@@ -6,6 +6,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
 {
     public interface ITicketService
     {
+        Task<MobileDashboardSummaryResponse> GetMobileTicketCountAsync(int enforcerId);
         Task<TicketDetailResponse> GetTicketDetailByIdAsync(int ticketId);
         Task<InspectionSummaryResponse> CreateTicketAsync(CreateTicketRequest request);
         Task<FineSummaryResponse> GetOffenseCountsAndPaymentBy(List<int> ordinanceIds, int vendorId);

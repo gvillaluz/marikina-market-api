@@ -1,4 +1,5 @@
-﻿using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
+﻿using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
+using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
@@ -28,6 +29,47 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     StallNumber = v.StallNumber
                 })
                 .FirstOrDefaultAsync();
+        }
+
+        public async Task<WarningCheck> CheckHasWarning(int vendorId)
+        {
+            var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+            var warningTicket = await _context.Tickets
+                .Where(t => t.VendorId == vendorId
+                    && t.Type == ViolationType.Warning
+                    && t.Status == TicketStatus.Active
+                    && t.IssuedAt >= sevenDaysAgo)
+                .FirstOrDefaultAsync();
+
+            return new WarningCheck
+            {
+                VendorId = vendorId,
+                CanIssueWarning = warningTicket == null,
+                ActiveWarningIssuedAt = warningTicket?.IssuedAt
+            };
+        }
+
+        public async Task<List<WarningCheck>> CheckHasWarningList(List<int> vendorIds)
+        {
+            var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+
+            var activeWarnings = await _context.Tickets
+                .Where(t => vendorIds.Contains(t.VendorId)
+                    && t.Type == ViolationType.Warning
+                    && t.Status == TicketStatus.Active
+                    && t.IssuedAt >= sevenDaysAgo)
+                .ToListAsync();
+
+            return vendorIds.Select(id =>
+            {
+                var warning = activeWarnings.FirstOrDefault(t => t.VendorId == id);
+                return new WarningCheck
+                {
+                    VendorId = id,
+                    CanIssueWarning = warning is null,
+                    ActiveWarningIssuedAt = warning?.IssuedAt
+                };
+            }).ToList();
         }
 
         public async Task<VendorProfile> CreateVendorAsync(VendorProfile vendorProfile)
@@ -68,6 +110,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Select(v => new VendorLookupResult
                 {
                     VendorId = v.Id,
+                    Username = v.User.UserName,
                     StallNumber = v.StallNumber,
                     TradeName = v.BusinessName,
                     LastName = v.User.LastName,
@@ -87,6 +130,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Select(v => new VendorLookupResult
                 {
                     VendorId = v.Id,
+                    Username = v.User.UserName,
                     StallNumber = v.StallNumber,
                     TradeName = v.BusinessName,
                     LastName = v.User.LastName,

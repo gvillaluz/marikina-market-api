@@ -174,18 +174,28 @@ namespace MarikinaMarket.API.Application.Services
         {
             var vendors = await _vendorRepository.GetVendorByStallNumber(stallNumber);
 
+            var vendorIdsWithWarning = await _vendorRepository.CheckHasWarningList(vendors.Select(v => v.VendorId).ToList());
+            var warningLookup = vendorIdsWithWarning.ToDictionary(w => w.VendorId);
+
             return vendors
-                .Select(v => new GetVendorResponse
-                {
-                    VendorId = v.VendorId,
-                    StallNumber = v.StallNumber,
-                    TradeName = v.TradeName,
-                    LastName = v.LastName,
-                    FirstName = v.FirstName,
-                    MiddleName = v.MiddleName,
-                    Address = "",
-                    MarketSectionId = v.MarketSectionId,
-                    MarketSectionName = v.MarketSectionName
+                .Select(v => {
+                    var warningCheck = warningLookup[v.VendorId];
+                    return new GetVendorResponse
+                    {
+                        
+                        VendorId = v.VendorId,
+                        Username = v.Username,
+                        StallNumber = v.StallNumber,
+                        TradeName = v.TradeName,
+                        LastName = v.LastName,
+                        FirstName = v.FirstName,
+                        MiddleName = v.MiddleName,
+                        Address = "",
+                        MarketSectionId = v.MarketSectionId,
+                        MarketSectionName = v.MarketSectionName,
+                        CanIssueWarning = warningCheck.CanIssueWarning,
+                        ActiveWarningIssuedAt = warningCheck.ActiveWarningIssuedAt
+                    };
                 }).ToList();
         }
 
@@ -196,9 +206,12 @@ namespace MarikinaMarket.API.Application.Services
             if (vendor == null)
                 throw new RecordNotFoundException("Vendor not found.");
 
+            var warningCheck = await _vendorRepository.CheckHasWarning(vendor.VendorId);
+
             return new GetVendorResponse
             {
                 VendorId = vendor.VendorId,
+                Username = vendor.Username,
                 StallNumber = vendor.StallNumber,
                 TradeName = vendor.TradeName,
                 LastName = vendor.LastName,
@@ -206,7 +219,9 @@ namespace MarikinaMarket.API.Application.Services
                 MiddleName = vendor.MiddleName,
                 Address = "",
                 MarketSectionId = vendor.MarketSectionId,
-                MarketSectionName = vendor.MarketSectionName
+                MarketSectionName = vendor.MarketSectionName,
+                CanIssueWarning = warningCheck.CanIssueWarning,
+                ActiveWarningIssuedAt = warningCheck.ActiveWarningIssuedAt
             };
         }
     }

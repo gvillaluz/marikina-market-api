@@ -7,6 +7,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface ITicketRepository
     {
+        Task<DashboardTicketCount> GetTicketCountAsync(int enforcerId);
         Task<TicketDetailResponse?> GetTicketDetailAsync(int ticketId);
         Task<int> GetNewControlNumber();
         Task<List<DuplicateOrdinance>> GetDuplicatedTickets(int vendorId, List<int> ordinanceIds);

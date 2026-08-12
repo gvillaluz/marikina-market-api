@@ -34,6 +34,18 @@ namespace MarikinaMarket.API.Application.Services
             _fileStorage = fileStorage;
         }
 
+        public async Task<MobileDashboardSummaryResponse> GetMobileTicketCountAsync(int enforcerId)
+        {
+            var ticketCount = await _ticketRepository.GetTicketCountAsync(enforcerId);
+
+            return new MobileDashboardSummaryResponse
+            {
+                TicketRecorded = ticketCount.TicketRecorded,
+                WarningRecorded = ticketCount.WarningRecorded,
+                TotalRecorded = ticketCount.TotalRecorded  
+            };
+        }
+
         public async Task<FineSummaryResponse> GetOffenseCountsAndPaymentBy(List<int> ordinanceIds, int vendorId)
         {
             var ordinanceWithTiers = await _ordinanceRepository.GetByIdsAsync(ordinanceIds, vendorId);

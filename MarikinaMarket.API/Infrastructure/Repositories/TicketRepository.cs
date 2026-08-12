@@ -18,6 +18,24 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task<DashboardTicketCount> GetTicketCountAsync(int enforcerId)
+        {
+            var sevenDaysAgo = DateTime.UtcNow.Date.AddDays(-7);
+
+            var baseQuery = _context.Tickets
+                .Where(t => t.EnforcerId == enforcerId && t.IssuedAt >= sevenDaysAgo);
+
+            var ticketCount = await baseQuery.CountAsync(t => t.Type == ViolationType.Ticket);
+            var warningCount = await baseQuery.CountAsync(t => t.Type == ViolationType.Warning);
+
+            return new DashboardTicketCount
+            {
+                TicketRecorded = ticketCount,
+                WarningRecorded = warningCount,
+                TotalRecorded = ticketCount + warningCount
+            };
+        }
+
         public async Task<TicketDetailResponse?> GetTicketDetailAsync(int ticketId)
         {
             return await _context.Tickets

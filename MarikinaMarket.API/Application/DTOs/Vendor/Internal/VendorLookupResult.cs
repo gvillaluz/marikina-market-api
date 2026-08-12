@@ -3,6 +3,7 @@
     public class VendorLookupResult
     {
         public required int VendorId;
+        public required string Username;
         public required string StallNumber;
         public required string TradeName;
         public required string LastName;
