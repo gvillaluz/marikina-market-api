@@ -23,6 +23,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     Id = v.Id,
                     LastName = v.User!.LastName,
                     FirstName = v.User.FirstName,
+                    Email = v.User!.Email,
                     MarketSectionId = v.MarketSectionId,
                     MarketSectionName = v.MarketSection!.Name,
                     BusinessName = v.BusinessName,
@@ -37,7 +38,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             var warningTicket = await _context.Tickets
                 .Where(t => t.VendorId == vendorId
                     && t.Type == ViolationType.Warning
-                    && t.Status == TicketStatus.Active
+                    && t.Status == TicketStatus.Pending
                     && t.IssuedAt >= sevenDaysAgo)
                 .FirstOrDefaultAsync();
 
@@ -56,7 +57,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             var activeWarnings = await _context.Tickets
                 .Where(t => vendorIds.Contains(t.VendorId)
                     && t.Type == ViolationType.Warning
-                    && t.Status == TicketStatus.Active
+                    && t.Status == TicketStatus.Pending
                     && t.IssuedAt >= sevenDaysAgo)
                 .ToListAsync();
 
@@ -141,6 +142,13 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     MarketSectionName = v.MarketSection.Name
                 })
                 .FirstOrDefaultAsync();
+        }
+
+        public async void SetOriginalVersion(VendorRegistrationRequest registration, uint version)
+        {
+            _context.Entry(registration)
+                .Property(r => r.Version)
+                .OriginalValue = version;
         }
     }
 }

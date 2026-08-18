@@ -3,6 +3,7 @@ using System;
 using MarikinaMarket.API.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MarikinaMarket.API.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817134824_AddedTicketRowVersion")]
+    partial class AddedTicketRowVersion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -776,50 +779,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
-            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.UserDeviceToken", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("DeviceToken")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("device_token");
-
-                    b.Property<DateTime>("LastUsedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_used_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_user_device_tokens");
-
-                    b.HasIndex("DeviceToken")
-                        .IsUnique()
-                        .HasDatabaseName("ix_user_device_tokens_device_token");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_user_device_tokens_user_id");
-
-                    b.ToTable("user_device_tokens", (string)null);
-                });
-
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.VendorProfile", b =>
                 {
                     b.Property<int>("Id")
@@ -1333,18 +1292,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.Navigation("Ordinance");
 
                     b.Navigation("Ticket");
-                });
-
-            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.UserDeviceToken", b =>
-                {
-                    b.HasOne("MarikinaMarket.API.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_user_device_tokens_users_user_id");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.VendorProfile", b =>

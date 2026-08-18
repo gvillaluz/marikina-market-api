@@ -35,7 +35,9 @@ namespace MarikinaMarket.API.Application.Services
 
             var claims = new Dictionary<string, object>
             {
-                [ClaimTypes.NameIdentifier] = user.Id
+                [ClaimTypes.NameIdentifier] = user.Id,
+                ["first_name"] = user.FirstName,
+                ["last_name"] = user.LastName,   
             };
 
             if (roles.Any())

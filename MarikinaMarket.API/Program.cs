@@ -1,3 +1,5 @@
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Application.Services;
@@ -45,6 +47,16 @@ builder.Services.AddIdentityCore<User>(options =>
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+var credential = CredentialFactory.FromFile<ServiceAccountCredential>(
+    "Keys/marikina-market-firebase-adminsdk-fbsvc-d28eb0ee73.json"
+).ToGoogleCredential();
+
+FirebaseApp.Create(new AppOptions()
+{
+    Credential = credential
+});
+builder.Services.AddSingleton(FirebaseApp.DefaultInstance);
+
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IVendorRepository, VendorRepository>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
@@ -59,6 +71,9 @@ builder.Services.AddScoped<IOrdinanceService, OrdinanceService>();
 builder.Services.AddScoped<IMarketSectionService, MarketSectionService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
+builder.Services.AddSingleton<IEmailService, EmailService>();
+builder.Services.AddSingleton<IPushNotificationService, PushNotificationService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 builder.Services.AddAuthentication(options =>
 {

@@ -46,6 +46,7 @@ namespace MarikinaMarket.API.Application.Services
             return new LoginResponse 
             { 
                 AccessToken = generatedAccessToken,
+                MustChangePassword = user.MustChangePassword
             };
         }
 
@@ -95,7 +96,12 @@ namespace MarikinaMarket.API.Application.Services
                 Email = request.EmailAddress,
                 LastName = request.LastName,
                 Status = AccountStatus.Active,
-                MustChangedPassword = true
+                MustChangePassword = true,
+                DateOfBirth = request.DateOfBirth,
+                HouseNumber = request.HouseNumber,
+                Street = request.Street,
+                Barangay = request.Barangay,
+                City = request.City
             };
 
             string defaultPassword = userName;
@@ -152,7 +158,7 @@ namespace MarikinaMarket.API.Application.Services
                 throw new AccountLockedException("Too many attempts. Please try again later.");
 
             if (!isPasswordValid.Succeeded)
-                throw new InvalidCredentialsException("Invalid email or password.");
+                throw new InvalidCredentialsException("Invalid username or password.");
 
             return user;
         }
@@ -219,10 +225,16 @@ namespace MarikinaMarket.API.Application.Services
                 LastName = user.LastName,
                 MiddleName = user.MiddleName,
                 Email = user.Email ?? "",
+                DateOfBirth = user.DateOfBirth,
+                MobileNumber = user.PhoneNumber ?? "",
+                HouseNumber = user.HouseNumber,
+                Street = user.Street,
+                Barangay = user.Barangay,
+                City = user.City,
                 Status = user.Status,
                 Role = role,
                 CreatedAt = user.CreatedAt,
-                MustChangedPassword = user.MustChangedPassword
+                MustChangedPassword = user.MustChangePassword
             };
         }
 
@@ -257,10 +269,16 @@ namespace MarikinaMarket.API.Application.Services
                 LastName = user.LastName,
                 MiddleName = user.MiddleName,
                 Email = user.Email ?? "",
+                DateOfBirth = user.DateOfBirth,
+                MobileNumber = user.PhoneNumber ?? "",
+                HouseNumber = user.HouseNumber,
+                Street = user.Street,
+                Barangay = user.Barangay,
+                City = user.City,
                 Status = user.Status,
                 Role = role,
                 CreatedAt = user.CreatedAt,
-                MustChangedPassword = user.MustChangedPassword
+                MustChangedPassword = user.MustChangePassword
             };
         }
 
@@ -278,11 +296,41 @@ namespace MarikinaMarket.API.Application.Services
 
             if (result.Succeeded && clearMandatoryFlag)
             {
-                user.MustChangedPassword = false;
+                user.MustChangePassword = false;
                 await _userRepository.UpdateUserAsync(user);
             }
 
             return result;
+        }
+
+        public async Task RegisterDeviceTokenAsync(int userId, string deviceToken)
+        {
+            var existingToken = await _userRepository.GetDeviceTokenByValueAsync(deviceToken);
+
+            if (existingToken is not null) 
+            {
+                if (existingToken.UserId == userId)
+                {
+                    existingToken.LastUsedAt = DateTime.UtcNow;
+                    await _userRepository.SaveChangesAsync();
+                    return;
+                }
+
+                existingToken.UserId = userId;
+                existingToken.LastUsedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                var userDeviceToken = new UserDeviceToken
+                {
+                    UserId = userId,
+                    DeviceToken = deviceToken,
+                    CreatedAt = DateTime.UtcNow,
+                    LastUsedAt = DateTime.UtcNow
+                };
+                await _userRepository.AddDeviceTokenAsync(userDeviceToken);
+            }
+            await _userRepository.SaveChangesAsync();
         }
     }
 }

@@ -37,9 +37,6 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
             builder.Property(x => x.TotalPaymentAmount)
                 .HasPrecision(18, 2);
 
-            builder.Property(x => x.PaymentStatus)
-                .HasConversion<string>();
-
             builder.Property(x => x.ReceiptUrl)
                 .HasMaxLength(1000);
 
@@ -57,6 +54,11 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
 
             builder.Property(v => v.IssuedAt)
                 .HasDefaultValueSql("timezone('utc', now())");
+
+            builder.Property(v => v.Version)
+                .IsRowVersion()
+                .HasColumnName("xmin")
+                .HasColumnType("xid");
         }
     }
 }

@@ -8,14 +8,15 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
 {
     public interface IUserService
     {
-        public Task<LoginResponse> LoginAsync(LoginRequest request);
-        public Task<LoginMobileResponse> LoginMobileAsync(LoginRequest request);
-        public Task<RegisterResponse> RegisterAsync(RegisterRequest request);
-        public Task<User?> ValidateCredentialsAsync(string userName, string password);
-        public Task<TokenRefreshResponse> RefreshTokensAsync(TokenRefreshRequest request);
-        public Task<UserProfileResponse> GetUserInfoAsync(int userId);
-        public Task<UserProfileResponse> UpdateUserInfo(EditUserRequest request, int userId);
-        public Task<IdentityResult> MandatoryChangePasswordAsync(ChangePasswordRequest request, int userId);
-        public Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId, bool clearMandatoryFlag = false);
+        Task<LoginResponse> LoginAsync(LoginRequest request);
+        Task<LoginMobileResponse> LoginMobileAsync(LoginRequest request);
+        Task<RegisterResponse> RegisterAsync(RegisterRequest request);
+        Task<User?> ValidateCredentialsAsync(string userName, string password);
+        Task<TokenRefreshResponse> RefreshTokensAsync(TokenRefreshRequest request);
+        Task<UserProfileResponse> GetUserInfoAsync(int userId);
+        Task<UserProfileResponse> UpdateUserInfo(EditUserRequest request, int userId);
+        Task<IdentityResult> MandatoryChangePasswordAsync(ChangePasswordRequest request, int userId);
+        Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId, bool clearMandatoryFlag = false);
+        Task RegisterDeviceTokenAsync(int userId, string deviceToken);
     }
 }

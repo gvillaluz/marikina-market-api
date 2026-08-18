@@ -33,4 +33,29 @@ namespace MarikinaMarket.API.Application
             DuplicateOrdinances = duplicateOrdinances;
         }
     }
+
+    public class AlreadyProcessedException : Exception
+    {
+        public AlreadyProcessedException(string message) : base(message) { }
+    }
+
+    public class ConcurrencyConflictException : Exception
+    {
+        public ConcurrencyConflictException(string message) : base(message) { }
+    }
+
+    public class ResourceCreationFailedException : Exception
+    {
+        public ResourceCreationFailedException(string message) : base(message) { }
+    }
+
+    public class InvalidRequestException : Exception
+    {
+        public InvalidRequestException(string message) : base(message) { }
+    }
+
+    public class DuplicateWarningException : Exception
+    {
+        public DuplicateWarningException(string message) : base(message) { }
+    }
 }

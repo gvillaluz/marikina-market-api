@@ -1,4 +1,5 @@
-﻿using MarikinaMarket.API.Application.DTOs.Tickets.Request;
+﻿using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
+using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Enums;
@@ -79,7 +80,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         [Authorize(Roles = nameof(Role.Enforcer))]
         public async Task<ActionResult<PageResponse<TicketSummaryResponse>>> GetAllTicketsByEnforcerId(
             [FromQuery] int offset = 0,
-            [FromQuery] TicketStatus status = TicketStatus.Active
+            [FromQuery] TicketStatus status = TicketStatus.Pending
             )
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -100,6 +101,13 @@ namespace MarikinaMarket.API.Presentation.Controllers
                 return BadRequest("Ordinance and vendor must not be empty.");
 
             return Ok(await _service.GetOffenseCountsAndPaymentBy(request.OrdinanceIds, request.VendorId));
+        }
+
+        [HttpPatch("{ticketId}/update-status")]
+        [Authorize(Roles = nameof(Role.Admin))]
+        public async Task<ActionResult<UpdateStatusResponse>> UpdateTicketStatus([FromRoute] int ticketId, [FromBody] UpdateStatusRequest request)
+        {
+            return Ok(await _service.UpdateTicketStatusAsync(ticketId, request));
         }
     }
 }

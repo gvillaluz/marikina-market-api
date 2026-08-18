@@ -6,6 +6,57 @@ namespace MarikinaMarket.API.Application.DTOs.User.Request
 {
     public class RegisterVendorRequest
     {
+        [Required(ErrorMessage = "First name is required.")]
+        [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be between 2 and 50 characters.")]
+        public required string FirstName { get; set; }
+        public string? MiddleName { get; set; }
+
+        [Required(ErrorMessage = "Last name is required.")]
+        [StringLength(50, MinimumLength = 2, ErrorMessage = "Last name must be between 2 and 50 characters.")]
+        public required string LastName { get; set; }
+
+        [Required(ErrorMessage = "Birth date is required.")]
+        [DataType(DataType.Date)]
+        public DateOnly DateOfBirth { get; set; }
+
+        [Required(ErrorMessage = "Age is required.")]
+        [Range(0, 120, ErrorMessage = "Age must be between {1} and {2}")]
+        public required int Age { get; set; }
+
+        [Required(ErrorMessage = "Mobile number is required.")]
+        [RegularExpression(@"^09\d{9}$", ErrorMessage = "Mobile number must be a valid PH number (e.g. 09171234567)")]
+        public required string MobileNumber { get; set; }
+
+        [Required(ErrorMessage = "House number is required.")]
+        [StringLength(50)]
+        public required string HouseNumber { get; set; }
+
+        [Required(ErrorMessage = "Street is required.")]
+        [StringLength(50)]
+        public required string Street { get; set; }
+
+        [Required(ErrorMessage = "Barangay is required.")]
+        [StringLength(60)]
+        public required string Barangay { get; set; }
+
+        [Required(ErrorMessage = "City is required.")]
+        [StringLength(100)]
+        public required string City { get; set; }
+
+        [Required(ErrorMessage = "Business name is required.")]
+        [StringLength(100, MinimumLength = 2, ErrorMessage = "Business name must be between 2 and 50 characters.")]
+        public required string BusinessName { get; set; }
+
+        [Required(ErrorMessage = "")]
+        [StringLength(100, MinimumLength = 10)]
+        public required string NatureOfBusiness { get; set; }
+
+        [Required(ErrorMessage = "Stall number is required.")]
+        public required string StallNumber { get; set; }
+
+        [Required(ErrorMessage = "Market section is required.")]
+        public required int MarketSectionId { get; set; }
+
         [Required(ErrorMessage = "Government ID type is required.")]
         [EnumDataType(typeof(GovernmentIdType), ErrorMessage = "Invalid government ID type.")]
         public GovernmentIdType GovernmentIdType { get; set; }
@@ -22,31 +73,12 @@ namespace MarikinaMarket.API.Application.DTOs.User.Request
         [Url(ErrorMessage = "Business document photo must be a valid URL.")]
         public required string BusinessDocumentPhotoUrl { get; set; }
 
-        [Required(ErrorMessage = "Business name is required.")]
-        [StringLength(100, MinimumLength = 2, ErrorMessage = "Business name must be between 2 and 50 characters.")]
-        public required string BusinessName { get; set; }
-
-        [Required(ErrorMessage = "First name is required.")]
-        [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be between 2 and 50 characters.")]
-        public required string FirstName { get; set; }
-        public string? MiddleName { get; set; }
-
-        [Required(ErrorMessage = "Last name is required.")]
-        [StringLength(50, MinimumLength = 2, ErrorMessage = "Last name must be between 2 and 50 characters.")]
-        public required string LastName { get; set; }
-
         [Required(ErrorMessage = "Email is required.")]
         [EmailAddress(ErrorMessage = "Invalid email address.")]
-        public required string Email { get; set; }
+        public required string Email { get; set; }        
 
         [Required(ErrorMessage = "Password is required.")]
         [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters.")]
         public required string Password { get; set; }
-
-        [Required(ErrorMessage = "Stall number is required.")]
-        public required string StallNumber { get; set; }
-
-        [Required(ErrorMessage = "Market section is required.")]
-        public required int MarketSectionId { get; set; }
     }
 }

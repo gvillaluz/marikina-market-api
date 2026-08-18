@@ -14,6 +14,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         public Task<VendorRegistrationRequest?> GetRegistrationById(int registrationId);
         public Task<List<VendorLookupResult>> GetVendorByStallNumber(string stallNumber);
         public Task<VendorLookupResult?> GetVendorByQrCode(string codeValue);
+        public void SetOriginalVersion(VendorRegistrationRequest request, uint version);
         public Task SaveChangesAsync();
     }
 }

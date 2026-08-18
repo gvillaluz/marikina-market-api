@@ -6,7 +6,9 @@ using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens.Experimental;
+using Microsoft.OpenApi;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -17,6 +19,7 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IVendorRepository _vendorRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IFileStorage _fileStorage;
+        private readonly INotificationService _notificationService;
         private readonly int PAGE_SIZE = 10;
 
         public TicketService(
@@ -24,7 +27,8 @@ namespace MarikinaMarket.API.Application.Services
             IOrdinanceRepository ordinanceRepository,
             IVendorRepository vendorRepository,
             IUnitOfWork unitOfWork,
-            IFileStorage fileStorage
+            IFileStorage fileStorage,
+            INotificationService notificationService
             )
         {
             _ticketRepository = ticketRepository;
@@ -32,6 +36,7 @@ namespace MarikinaMarket.API.Application.Services
             _vendorRepository = vendorRepository;
             _unitOfWork = unitOfWork;
             _fileStorage = fileStorage;
+            _notificationService = notificationService;
         }
 
         public async Task<MobileDashboardSummaryResponse> GetMobileTicketCountAsync(int enforcerId)
@@ -53,12 +58,6 @@ namespace MarikinaMarket.API.Application.Services
             return BuildFineSummary(ordinanceWithTiers, false, duplicateOrdinances);
         }
 
-        public async Task<FineSummaryResponse> ApplyOffenseCountsAndCalculateFines(List<int> ordinanceIds, int vendorId)
-        {
-            var ordinanceWithTiers = await _ordinanceRepository.GetByIdsAsync(ordinanceIds, vendorId);
-            return BuildFineSummary(ordinanceWithTiers, true);
-        }
-
         private static FineSummaryResponse BuildFineSummary(
             List<OrdinanceOffenseSummary> ordinances,
             bool persist,
@@ -78,7 +77,11 @@ namespace MarikinaMarket.API.Application.Services
 
             foreach (var ordinance in ordinances)
             {
-                int offenseNumber = ordinance.OffenseCount + 1;
+                int offenseNumber = persist 
+                    ? ordinance.OffenseCount + 1 
+                    : ordinance.OffenseCount <= 0 
+                        ? 1
+                        : ordinance.OffenseCount;
                 bool IsDuplicate = duplicateIds.Contains(ordinance.OrdinanceId);
 
                 if (persist && !IsDuplicate)
@@ -126,7 +129,7 @@ namespace MarikinaMarket.API.Application.Services
                 var vendor = await _vendorRepository.GetByIdAsync(request.VendorId);
 
                 if (vendor is null)
-                    throw new ArgumentNullException("Unable to find vendor.");
+                    throw new RecordNotFoundException("Unable to find vendor.");
 
                 var duplicateOrdinances = await _ticketRepository.GetDuplicatedTickets(vendor.Id, request.Ordinances);
 
@@ -144,24 +147,34 @@ namespace MarikinaMarket.API.Application.Services
                     );
                 }
 
-                var ordinanceFineSummary = await ApplyOffenseCountsAndCalculateFines(request.Ordinances, request.VendorId);
-                var newControlNumber = await _ticketRepository.GetNewControlNumber();
+                var ordinanceWithTiers = await _ordinanceRepository.GetByIdsAsync(request.Ordinances, request.VendorId);
+
+                var ordinanceFineSummary = BuildFineSummary(
+                    ordinanceWithTiers,
+                    persist: request.Type != ViolationType.Warning
+                );
 
                 if (request.Type == ViolationType.Warning)
                 {
+                    var hasActiveWarningTicket = await _ticketRepository.HasActiveWarningTicket(vendor.Id);
+
+                    if (hasActiveWarningTicket)
+                    {
+                        throw new DuplicateWarningException("This vendor already has an active warning. A second warning cannot be issued within 24 hours.");
+                    }
+
                     var warningTicket = new Ticket
                     {
-                        ControlNumber = newControlNumber.ToString(),
+                        ControlNumber = null,
                         VendorId = vendor.Id,
                         MarketSectionId = vendor.MarketSectionId,
                         EnforcerId = request.EnforcerId,
                         Type = request.Type,
-                        Status = TicketStatus.Active,
+                        Status = TicketStatus.Pending,
                         Description = request.Description,
                         TotalPaymentAmount = null,
                         HighestSeverity = null,
                         PenaltyType = null,
-                        PaymentStatus = PaymentStatus.NotApplicable,
                         CommunityServiceHours = null,
                         ReceiptUrl = null,
                         Categories = [.. ordinanceFineSummary.Breakdown.Select(o => o.Category)],
@@ -182,10 +195,27 @@ namespace MarikinaMarket.API.Application.Services
                     await _unitOfWork.SaveChangesAsync();
                     await _unitOfWork.CommitAsync();
 
+                    if (!string.IsNullOrEmpty(vendor.Email))
+                    {
+                        string subject = $"Notice of Issued Warning";
+                        string body = $"Dear {vendor.FirstName} {vendor.LastName},\n\n" +
+                            $"This is to inform you that a warning ticket has been issued for your stall, {vendor.BusinessName}.\n\n" +
+                            $"Reason for Warning:\n{newWarningTicket.Description}\n\n" +
+                            $"Date Issued: {newWarningTicket.IssuedAt:MMMM dd, yyyy - hh:mm tt} UTC\n\n" +
+                            $"This warning serves as an official notice. Please address the issue(s) mentioned above promptly. " +
+                            $"Failure to resolve them may result in a formal citation and corresponding fines.\n\n" +
+                            $"If you believe this warning was issued in error, you may contact the market administration office to file a dispute.\n\n" +
+                            $"Thank you for your cooperation.\n\n" +
+                            $"Sincerely,\n" +
+                            $"Market Administration Office";
+
+                        await _notificationService.SendEmailAsync(vendor.Email, subject, body);
+                    }
+
                     return new InspectionSummaryResponse
                     {
                         Id = newWarningTicket.Id,
-                        ControlNumber = newWarningTicket.ControlNumber,
+                        ControlNumber = newWarningTicket!.ControlNumber!,
                         VendorId = newWarningTicket.VendorId,
                         LastName = vendor.LastName,
                         FirstName = vendor.FirstName,
@@ -207,6 +237,7 @@ namespace MarikinaMarket.API.Application.Services
                     };
                 }
 
+                var newControlNumber = await _ticketRepository.GetNewControlNumber();
                 var ticketEvidences = new List<TicketEvidence>();
 
                 foreach (var file in request.TicketEvidenceFiles)
@@ -223,12 +254,6 @@ namespace MarikinaMarket.API.Application.Services
                 if (!isCashFine && ordinanceFineSummary.HighestSeverity == Severity.High)
                     throw new InvalidOperationException("High severity violations must be paid as cash fine.");
 
-                var paymentStatus = isCashFine 
-                    ? PaymentStatus.Pending
-                    : request.PenaltyType == PenaltyType.BloodDonation
-                        ? PaymentStatus.BloodDonation
-                        : PaymentStatus.CommunityService;
-
                 var ticket = new Ticket
                 {
                     ControlNumber = newControlNumber.ToString(),
@@ -236,12 +261,11 @@ namespace MarikinaMarket.API.Application.Services
                     MarketSectionId = vendor.MarketSectionId,
                     EnforcerId = request.EnforcerId,
                     Type = request.Type,
-                    Status = TicketStatus.Active,
+                    Status = TicketStatus.Pending,
                     Description = request.Description,
                     TotalPaymentAmount = ordinanceFineSummary.TotalPaymentAmount,
                     HighestSeverity = ordinanceFineSummary.HighestSeverity,
                     PenaltyType = request.PenaltyType,
-                    PaymentStatus = paymentStatus,
                     CommunityServiceHours = request.CommunityServiceHours,
                     ReceiptUrl = null,
                     Categories = [..ordinanceFineSummary.Breakdown.Select(o => o.Category)],
@@ -262,10 +286,27 @@ namespace MarikinaMarket.API.Application.Services
                 await _unitOfWork.SaveChangesAsync();
                 await _unitOfWork.CommitAsync();
 
+                if (!string.IsNullOrEmpty(vendor.Email))
+                {
+                    string subject = $"Notice of Violation Ticket - Control No. {newTicket.ControlNumber}";
+                    string body = $"Dear {vendor.FirstName} {vendor.LastName},\n\n" +
+                        $"This is to inform you that a violation ticket has been issued for your stall, {vendor.BusinessName}.\n\n" +
+                        $"Control No.: {newTicket.ControlNumber}\n" +
+                        $"Total Penalty: PHP {newTicket.TotalPaymentAmount:N2}\n" +
+                        $"Due Date: {newTicket.IssuedAt.AddDays(15):MMMM dd, yyyy}\n\n" +
+                        $"Please settle the amount above on or before the due date to avoid further administrative action, including additional penalties or suspension of your stall permit.\n\n" +
+                        $"If you wish to contest this ticket, please visit the market administration office within 15 days of the issue date to file an appeal.\n\n" +
+                        $"Thank you for your prompt attention to this matter.\n\n" +
+                        $"Sincerely,\n" +
+                        $"Market Administration Office";
+
+                    await _notificationService.SendEmailAsync(vendor.Email, subject, body);
+                }
+
                 return new InspectionSummaryResponse
                 {
                     Id = newTicket.Id,
-                    ControlNumber = newTicket.ControlNumber,
+                    ControlNumber = newTicket!.ControlNumber!,
                     VendorId = newTicket.VendorId,
                     LastName = vendor.LastName,
                     FirstName = vendor.FirstName,
@@ -385,6 +426,60 @@ namespace MarikinaMarket.API.Application.Services
                 throw new RecordNotFoundException("Ticket not found.");
 
             return ticketDetail;
+        }
+
+        public async Task<UpdateStatusResponse> UpdateTicketStatusAsync(int ticketId, UpdateStatusRequest request)
+        {
+            var ticket = await _ticketRepository.GetTicketByIdAsync(ticketId);
+
+            if (ticket is null) throw new RecordNotFoundException("Ticket not found.");
+
+            var previousStatus = ticket.Status;
+
+            _ticketRepository.SetOriginalVersion(ticket, request.Version);
+            ticket.Status = request.NewStatus;
+            ticket.UpdatedAt = DateTime.UtcNow;
+
+            try
+            {
+                await _ticketRepository.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConcurrencyConflictException("The ticket has been updated by another user. Please refresh and try again.");
+            }
+
+            if (!string.IsNullOrEmpty(ticket?.Vendor?.User?.Email))
+            {
+                string subject = $"Ticket Status Update - Control No. {ticket.ControlNumber}";
+                string body = $"Dear {ticket.Vendor.User.FirstName} {ticket.Vendor.User.LastName},\n\n" +
+                    $"This is to inform you that the status of your ticket has been updated.\n\n" +
+                    $"Control No.: {ticket.ControlNumber}\n" +
+                    $"Previous Status: {previousStatus}\n" +
+                    $"Current Status: {ticket.Status}\n" +
+                    $"Updated At: {ticket.UpdatedAt:MMMM dd, yyyy - hh:mm tt} UTC\n\n" +
+                    $"Please review your ticket details for further information. If you have any questions or concerns regarding this update, please visit the market administration office.\n\n" +
+                    $"Thank you for your attention to this matter.\n\n" +
+                    $"Sincerely,\n" +
+                    $"Market Administration Office";
+
+                await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
+            }
+
+            await _notificationService.SendPushNotificationAsync(
+                ticket!.EnforcerId,
+                $"Ticket #{ticket.ControlNumber} Updated",
+                $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}."
+            );
+
+            return new UpdateStatusResponse
+            {
+                TicketId = ticket.Id,
+                ControlNumber = ticket!.ControlNumber!,
+                Status = ticket.Status,
+                UpdatedAt = ticket.UpdatedAt,
+                Version = ticket.Version
+            };
         }
     }
 }

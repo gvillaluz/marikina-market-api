@@ -2,6 +2,7 @@
 using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.User.Response;
 using MarikinaMarket.API.Application.Interfaces.Services;
+using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
@@ -110,6 +111,15 @@ namespace MarikinaMarket.API.Presentation.Controllers
             }
 
             return NoContent();
+        }
+
+        [HttpPost("device-token")]
+        [Authorize(Roles = nameof(Role.Enforcer))]
+        public async Task<IActionResult> RegisterDeviceToken([FromBody] string deviceToken)
+        {
+            var userId = GetUserIdFromClaims();
+            await _userService.RegisterDeviceTokenAsync(userId, deviceToken);
+            return Ok(new { message = "Device token registered." });
         }
 
         private int GetUserIdFromClaims()

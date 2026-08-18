@@ -2,9 +2,9 @@
 {
     public enum TicketStatus
     {
-        Active,
+        Pending,
         Paid,
         Void,
-        Disputed
+        Contested
     }
 }

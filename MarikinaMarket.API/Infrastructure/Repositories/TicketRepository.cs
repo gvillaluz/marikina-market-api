@@ -1,5 +1,4 @@
-﻿using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
-using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
+﻿using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Domain.Entities;
@@ -16,6 +15,13 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         public TicketRepository(AppDbContext context)
         {
             _context = context;
+        }
+
+        public async Task<Ticket?> GetTicketByIdAsync(int ticketId)
+        {
+            return await _context.Tickets
+                .Include(t => t.Vendor!.User)
+                .FirstOrDefaultAsync(t => t.Id == ticketId);
         }
 
         public async Task<DashboardTicketCount> GetTicketCountAsync(int enforcerId)
@@ -79,12 +85,22 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         public async Task<int> GetNewControlNumber()
         {
             var lastTicket = await _context.Tickets
-                .FromSqlRaw("SELECT * FROM tickets ORDER BY id DESC LIMIT 1 FOR UPDATE")
+                .FromSqlRaw("SELECT * FROM tickets WHERE type = 'Ticket' ORDER BY id DESC LIMIT 1 FOR UPDATE")
                 .FirstOrDefaultAsync();
 
-            if (lastTicket == null) return 1;
+            if (lastTicket is null) return 1;
 
-            return int.Parse(lastTicket.ControlNumber) + 1;
+            return int.Parse(lastTicket!.ControlNumber!) + 1;
+        }
+
+        public async Task<bool> HasActiveWarningTicket(int vendorId)
+        {
+            return await _context.Tickets
+                .AsNoTracking()
+                .AnyAsync(t => t.VendorId == vendorId &&
+                       t.Type == ViolationType.Warning &&
+                       t.Status == TicketStatus.Pending &&
+                       t.IssuedAt >= DateTime.UtcNow.AddHours(-24));
         }
 
         public async Task<List<DuplicateOrdinance>> GetDuplicatedTickets(int vendorId, List<int> ordinanceIds)
@@ -93,13 +109,14 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .AsNoTracking()
                 .Where(t => t.VendorId == vendorId &&
                             t.IssuedAt >= DateTime.UtcNow.AddHours(-24) &&
-                            t.Status == TicketStatus.Active)
+                            t.Status == TicketStatus.Pending &&
+                            t.Type == ViolationType.Ticket)
                 .SelectMany(t => t.TicketViolations)
                 .Where(tv => ordinanceIds.Contains(tv.OrdinanceId))
                 .Select(tv => new DuplicateOrdinance
                 {
                     OrdinanceId = tv.OrdinanceId,
-                    OrdinanceNo = tv.Ordinance.OrdinanceNo,
+                    OrdinanceNo = tv.Ordinance!.OrdinanceNo,
                     OrdinanceCode = tv.Ordinance.Code
                 })
                 .Distinct()
@@ -128,19 +145,19 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Select(t => new InspectionSummary
                 {
                     Id = t.Id,
-                    ControlNumber = t.ControlNumber,
+                    ControlNumber = t.ControlNumber!,
                     VendorId = t.VendorId,
-                    LastName = t.Vendor.User.LastName,
+                    LastName = t.Vendor!.User!.LastName,
                     FirstName = t.Vendor.User.FirstName,
                     BusinessName = t.Vendor.BusinessName,
                     MarketSectionId = t.MarketSectionId,
-                    MarketSectionName = t.MarketSection.Name,
+                    MarketSectionName = t.MarketSection!.Name,
                     StallNumber = t.Vendor.StallNumber,
                     EnforcerId = t.EnforcerId,
                     Type = t.Type,
                     Status = t.Status,
                     Severity = t.HighestSeverity,
-                    Ordinances = t.TicketViolations.Select(tv => tv.Ordinance.OrdinanceNo).ToList(),
+                    Ordinances = t.TicketViolations.Select(tv => tv.Ordinance!.OrdinanceNo).ToList(),
                     IssuedAt = t.IssuedAt,
                     UpdatedAt = t.UpdatedAt
                 }).ToListAsync();
@@ -154,23 +171,32 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             )
         {
             return await _context.Tickets
-            .Where(t => t.EnforcerId == enforcerId && t.Status == status)
+            .Where(t => t.EnforcerId == enforcerId 
+                        && t.Status == status
+                        && t.Type == ViolationType.Ticket)
             .OrderByDescending(t => t.IssuedAt)
             .Skip(offset)
             .Take(limit + 1)
             .Select(t => new TicketSummary
             {
                 Id = t.Id,
-                ControlNumber = t.ControlNumber,
+                ControlNumber = t.ControlNumber!,
                 VendorId = t.VendorId,
-                BusinessName = t.Vendor.BusinessName,
-                MarketSectionName = t.MarketSection.Name,
+                BusinessName = t.Vendor!.BusinessName,
+                MarketSectionName = t.MarketSection!.Name,
                 StallNumber = t.Vendor.StallNumber,
                 EnforcerId = t.EnforcerId,
                 Status = t.Status,
                 IssuedAt = t.IssuedAt,
                 UpdatedAt = t.UpdatedAt
             }).ToListAsync();
+        }
+
+        public void SetOriginalVersion(Ticket ticket, uint version)
+        {
+            _context.Entry(ticket)
+                .Property(t => t.Version)
+                .OriginalValue = version;
         }
 
         public async Task SaveChangesAsync()

@@ -103,5 +103,21 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<IdentityResult> ChangePasswordAsync(User user, string oldPassword, string newPassword)
             => await _userManager.ChangePasswordAsync(user, oldPassword, newPassword);
+
+        public async Task<UserDeviceToken?> GetDeviceTokenByValueAsync(string deviceToken)
+            =>  await _context.UserDeviceTokens.FirstOrDefaultAsync(d => d.DeviceToken == deviceToken);
+
+        public async Task<List<string>> GetDeviceTokensByIdAsync(int userId)
+        {
+            return await _context.UserDeviceTokens
+                .Where(d => d.UserId == userId)
+                .Select(d => d.DeviceToken)
+                .ToListAsync();
+        }
+
+        public async Task AddDeviceTokenAsync(UserDeviceToken userDeviceToken)
+        {
+            await _context.UserDeviceTokens.AddAsync(userDeviceToken);
+        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using MarikinaMarket.API.Application.DTOs.Tickets.Request;
+﻿using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
+using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Domain.Enums;
 
@@ -12,5 +13,6 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
         Task<FineSummaryResponse> GetOffenseCountsAndPaymentBy(List<int> ordinanceIds, int vendorId);
         Task<PageResponse<InspectionSummaryResponse>> GetInspectionsByEnforcerIdAsync(int enforcerId, int offset, ViolationType type);
         Task<PageResponse<TicketSummaryResponse>> GetTicketsByEnforcerIdAsync(int enforcerId, int offset, TicketStatus status);
+        Task<UpdateStatusResponse> UpdateTicketStatusAsync(int ticketId, UpdateStatusRequest request);
     }
 }

@@ -7,6 +7,7 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using System.Security.Cryptography;
 
@@ -44,7 +45,14 @@ namespace MarikinaMarket.API.Application.Services
             { 
                 FirstName = request.FirstName,
                 MiddleName = request.MiddleName,
-                LastName = request.LastName
+                LastName = request.LastName,
+                DateOfBirth = request.DateOfBirth,
+                Email = request.Email,
+                PhoneNumber = request.MobileNumber,
+                HouseNumber = request.HouseNumber,
+                Street = request.Street,
+                Barangay = request.Barangay,
+                City = request.City
             };
 
             var hashedPassword = hasher.HashPassword(tempUser, request.Password);
@@ -56,9 +64,17 @@ namespace MarikinaMarket.API.Application.Services
                 GovernmentIdPhotoUrl = request.GovernmentIdPhotoUrl,
                 BusinessDocumentPhotoUrl = request.BusinessDocumentPhotoUrl,
                 BusinessName = request.BusinessName,
+                NatureOfBusiness = request.NatureOfBusiness,
                 FirstName = request.FirstName,
                 LastName = request.LastName,
                 MiddleName = request.MiddleName,
+                DateOfBirth = request.DateOfBirth,
+                Age = request.Age,
+                HouseNumber = request.HouseNumber,
+                Street = request.Street,
+                Barangay = request.Barangay,
+                City = request.City,
+                PhoneNumber = request.MobileNumber,
                 Email = request.Email,
                 Password = hashedPassword,
                 StallNumber = request.StallNumber,
@@ -86,15 +102,20 @@ namespace MarikinaMarket.API.Application.Services
 
             try
             {
+                if (request.RequestStatus is not RequestStatus.Approved)
+                    throw new InvalidRequestException("RequestStatus must be Approved."); 
+
                 var registration = await _vendorRepository.GetRegistrationById(registrationId);
 
                 if (registration is null)
-                    throw new ArgumentNullException("Registration request record not found.");
+                    throw new RecordNotFoundException("Registration request record not found.");
 
                 if (registration.Status != RequestStatus.Pending)
-                    throw new Exception("This request has already been processed.");
+                    throw new AlreadyProcessedException("This request has already been processed.");
 
-                registration.Status = RequestStatus.Approved;
+                _vendorRepository.SetOriginalVersion(registration, request.Version);
+
+                registration.Status = request.RequestStatus;
                 registration.ReviewedAt = DateTime.UtcNow;
                 registration.ReviewedBy = request.AdminId;
 
@@ -103,29 +124,24 @@ namespace MarikinaMarket.API.Application.Services
                     FirstName = registration.FirstName,
                     MiddleName = registration.MiddleName,
                     LastName = registration.LastName,
+                    DateOfBirth = registration.DateOfBirth,
                     Email = registration.Email,
-                    PasswordHash = registration.Password,
-                    MustChangedPassword = false,
-                    Status = AccountStatus.Active
+                    PhoneNumber = registration.PhoneNumber,
+                    HouseNumber = registration.HouseNumber,
+                    Street = registration.Street,
+                    Barangay = registration.Barangay,
+                    City = registration.City
                 };
 
                 var userResult = await _userRepository.CreateUserWithPassAsync(newUser);
 
                 if (!userResult.Succeeded)
-                    throw new Exception("Failed to create user account.");
-
-                /*
-                    Update the response properties when the web app wireframe is created.
-
-                    Fix the RowVersion checking or querying.
-
-                    July 7, 2026
-                 */
+                    throw new ResourceCreationFailedException("Failed to create user account.");
 
                 var marketSection = await _marketSectionRepository.GetById(registration.MarketSectionId);
 
                 if (marketSection is null)
-                    throw new Exception("Failed to find selected market section.");
+                    throw new RecordNotFoundException("Failed to find selected market section.");
 
                 var vendor = new VendorProfile
                 {
@@ -154,8 +170,64 @@ namespace MarikinaMarket.API.Application.Services
                     AdminId = request.AdminId,
                     Status = VendorStatus.Active,
                     CreatedAt = newUser.CreatedAt,
-                    RowVersion = registration.RowVersion.ToString() ?? ""
+                    Version = registration.Version
                 };
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await _unitOfWork.RollbackAsync();
+                throw new ConcurrencyConflictException("This registration was already reviewed by another admin. Please refresh and try again.");
+            }
+            catch (Exception)
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<RegistrationDeclinedResponse> DeclineVendorRegistration(int registrationId, RegistrationAdminAction request)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+
+            try
+            {
+                if (request.RequestStatus is not RequestStatus.Declined)
+                    throw new InvalidRequestException("RequestStatus must be Declined.");
+
+                var registration = await _vendorRepository.GetRegistrationById(registrationId);
+
+                if (registration is null)
+                    throw new RecordNotFoundException("Registration request record not found.");
+
+                if (registration.Status != RequestStatus.Pending)
+                    throw new AlreadyProcessedException("This request has already been processed.");
+
+                if (string.IsNullOrWhiteSpace(request.RemarksOrReason))
+                    throw new InvalidRequestException("A reason is required when declining a registration.");
+
+                _vendorRepository.SetOriginalVersion(registration, request.Version);
+
+                registration.Status = request.RequestStatus;
+                registration.ReviewedAt = DateTime.UtcNow;
+                registration.ReviewedBy = request.AdminId;
+                registration.RemarksOrReason = request.RemarksOrReason;
+
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
+
+                return new RegistrationDeclinedResponse
+                {
+                    FirstName = registration.FirstName,
+                    MiddleName = registration.MiddleName,
+                    LastName = registration.LastName,
+                    BusinessName = registration.BusinessName,
+                    RemarksOrReason = registration.RemarksOrReason,
+                };
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await _unitOfWork.RollbackAsync();
+                throw new ConcurrencyConflictException("This registration was already reviewed by another admin. Please refresh and try again.");
             }
             catch (Exception)
             {

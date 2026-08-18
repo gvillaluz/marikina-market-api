@@ -36,6 +36,11 @@ namespace MarikinaMarket.API.Presentation.Middleware
                 AccountLockedException => StatusCodes.Status423Locked,
                 SessionExpiredException => StatusCodes.Status401Unauthorized,
                 DuplicateOrdinanceException => StatusCodes.Status409Conflict,
+                AlreadyProcessedException => StatusCodes.Status409Conflict,
+                ConcurrencyConflictException => StatusCodes.Status409Conflict,
+                ResourceCreationFailedException => StatusCodes.Status422UnprocessableEntity,
+                InvalidRequestException => StatusCodes.Status400BadRequest,
+                DuplicateWarningException => StatusCodes.Status409Conflict,
                 _ => StatusCodes.Status500InternalServerError
             };
 
@@ -57,6 +62,11 @@ namespace MarikinaMarket.API.Presentation.Middleware
                     title = "Duplicate Ordinances Today",
                     message = dupEx.Message,
                     duplicateOrdinances = dupEx.DuplicateOrdinances
+                },
+                DuplicateWarningException dupWar => new
+                {
+                    title = "Duplicate Warning",
+                    message = dupWar.Message,  
                 },
                 _ => new
                 {

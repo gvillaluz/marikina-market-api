@@ -15,6 +15,6 @@ namespace MarikinaMarket.API.Application.DTOs.Vendor.Response
         public required int AdminId { get; set; }
         public required VendorStatus Status { get; set; }
         public required DateTime CreatedAt { get; set; }
-        public required string RowVersion { get; set; }
+        public required uint Version { get; set; }
     }
 }

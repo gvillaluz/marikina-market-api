@@ -6,19 +6,22 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface IUserRepository
     {
-        public Task<User?> FindByUserNameAsync(string userName);
-        public Task<User?> FindByEmailAsync(string email);
-        public Task<IdentityResult> CreateUserAsync(User user, string password);
-        public Task<IdentityResult> CreateUserWithPassAsync(User user);
-        public Task<SignInResult> CheckPasswordAsync(User user, string password);
-        public Task<IdentityResult> AddToRoleAsync(User user, string role);
-        public Task<Role?> GetRoleAsync(User user);
-        public Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refresshToken);
-        public Task<RefreshToken?> GetRefreshTokenAsync(string refreshToken);
-        public Task<string> GetNextUserNameAsync();
-        public Task<User?> GetUserAsync(int userId);
-        public Task<IdentityResult> UpdateUserAsync(User user);
-        public Task<IdentityResult> ChangePasswordAsync(User user, string oldPassword, string newPassword);
-        public Task SaveChangesAsync();
+        Task<User?> FindByUserNameAsync(string userName);
+        Task<User?> FindByEmailAsync(string email);
+        Task<IdentityResult> CreateUserAsync(User user, string password);
+        Task<IdentityResult> CreateUserWithPassAsync(User user);
+        Task<SignInResult> CheckPasswordAsync(User user, string password);
+        Task<IdentityResult> AddToRoleAsync(User user, string role);
+        Task<Role?> GetRoleAsync(User user);
+        Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refresshToken);
+        Task<RefreshToken?> GetRefreshTokenAsync(string refreshToken);
+        Task<string> GetNextUserNameAsync();
+        Task<User?> GetUserAsync(int userId);
+        Task<IdentityResult> UpdateUserAsync(User user);
+        Task<IdentityResult> ChangePasswordAsync(User user, string oldPassword, string newPassword);
+        Task<List<string>> GetDeviceTokensByIdAsync(int userId);
+        Task<UserDeviceToken?> GetDeviceTokenByValueAsync(string deviceToken);
+        Task AddDeviceTokenAsync(UserDeviceToken userDeviceToken);
+        Task SaveChangesAsync();
     }
 }
