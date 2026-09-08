@@ -1,4 +1,5 @@
-﻿using MarikinaMarket.API.Application.Interfaces.Repositories;
+﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
+using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using MarikinaMarket.API.Infrastructure.Persistence;
@@ -118,6 +119,61 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         public async Task AddDeviceTokenAsync(UserDeviceToken userDeviceToken)
         {
             await _context.UserDeviceTokens.AddAsync(userDeviceToken);
+        }
+
+        public async Task<List<User>> GetEnforcersAsync(int offset, int limit, EnforcerSummaryFilter filters)
+        {
+            var enforcers = ApplyEnforcerFilters(_userManager.Users, filters);
+
+            var descending = string.Equals(filters.SortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+            enforcers = filters.SortBy switch
+            {
+                "tickets" => descending
+                    ? enforcers.OrderByDescending(e => e.IssuedTickets.Count(t => t.Type == ViolationType.Ticket))
+                    : enforcers.OrderBy(e => e.IssuedTickets.Count(t => t.Type == ViolationType.Ticket)),
+
+                "warnings" => descending
+                    ? enforcers.OrderByDescending(e => e.IssuedTickets.Count(t => t.Type == ViolationType.Warning))
+                    : enforcers.OrderBy(e => e.IssuedTickets.Count(t => t.Type == ViolationType.Warning)),
+
+                _ => descending
+                    ? enforcers.OrderByDescending(e => e.LastName).ThenByDescending(e => e.FirstName)
+                    : enforcers.OrderBy(e => e.LastName).ThenBy(e => e.FirstName),
+            };
+
+            return await enforcers
+                .Skip(offset)
+                .Take(limit + 1)
+                .ToListAsync();
+        }
+
+        public async Task<int> GetEnforcersCountAsync(EnforcerSummaryFilter filters)
+        {
+            var query = ApplyEnforcerFilters(_userManager.Users, filters);
+            return await query.CountAsync();
+        }
+
+        private IQueryable<User> ApplyEnforcerFilters(IQueryable<User> query, EnforcerSummaryFilter filters)
+        {
+            query = query.Where(u => _context.UserRoles
+                .Any(ur => ur.UserId == u.Id && _context.Roles
+                    .Any(r => r.Id == ur.RoleId && r.Name == nameof(Role.Enforcer))));
+
+            if (filters.Status.HasValue)
+            {
+                query = query.Where(u => u.Status == filters.Status.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filters.Search))
+            {
+                var term = filters.Search.Trim();
+                query = query.Where(u =>
+                    u.FirstName.ToLower().Contains(term.ToLower()) ||
+                    u.LastName.ToLower().Contains(term.ToLower()) ||
+                    (u.UserName != null && u.UserName.ToLower().Contains(term.ToLower())));
+            }
+
+            return query;
         }
     }
 }

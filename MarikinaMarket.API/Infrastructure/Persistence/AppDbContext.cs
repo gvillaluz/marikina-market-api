@@ -22,6 +22,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence
         public DbSet<VendorRegistrationRequest> VendorRegistrationRequests { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<UserDeviceToken> UserDeviceTokens { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

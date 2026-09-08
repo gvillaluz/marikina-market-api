@@ -15,6 +15,5 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Response
         public DateTime IssuedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public DateTime OverdueDate { get; set; }
-        public bool IsOverdue { get; set; }
     }
 }

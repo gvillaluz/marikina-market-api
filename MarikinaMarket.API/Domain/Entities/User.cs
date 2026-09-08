@@ -14,6 +14,7 @@ namespace MarikinaMarket.API.Domain.Entities
         public required string Barangay { get; set; }
         public required string City { get; set; }
         public AccountStatus Status { get; set; }
+        public string? ProfilePictureUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public bool MustChangePassword { get; set; } = false;
         public uint Version { get; set; }

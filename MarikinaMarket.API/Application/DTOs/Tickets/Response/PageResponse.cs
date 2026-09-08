@@ -4,5 +4,6 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Response
     {
         public List<T> Items { get; set; } = new();
         public bool HasMore { get; set; }
+        public int? Total { get; set; }
     }
 }

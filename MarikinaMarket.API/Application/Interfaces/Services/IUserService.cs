@@ -1,4 +1,6 @@
-﻿using MarikinaMarket.API.Application.DTOs.User.Request;
+﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
+using MarikinaMarket.API.Application.DTOs.Tickets.Response;
+using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.User.Response;
 using MarikinaMarket.API.Application.DTOs.Vendor.Response;
 using MarikinaMarket.API.Domain.Entities;

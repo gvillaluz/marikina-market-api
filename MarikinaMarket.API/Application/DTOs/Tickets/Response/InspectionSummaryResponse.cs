@@ -16,12 +16,11 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Response
         public required string StallNumber { get; init; }
         public required int EnforcerId { get; init; }
         public required ViolationType Type { get; init; }
-        public required TicketStatus Status { get; init; }
+        public required TicketStatus? Status { get; init; }
         public Severity? Severity { get; init; }
         public required List<string> OrdinanceNames { get; init; } = [];
         public required DateTime IssuedAt { get; init; }
         public DateTime? OverdueDate { get; init; }
-        public bool IsOverdue { get; init; }
         public DateTime UpdatedAt { get; init; }
         public List<DuplicateOrdinance>? DuplicateOrdinances { get; init; }
         public string? WarningMessageForDuplicates { get; init; }

@@ -4,7 +4,9 @@
     {
         Pending,
         Paid,
-        Void,
-        Contested
+        Waived,
+        Contested,
+        Overdue,
+        Cleared
     }
 }

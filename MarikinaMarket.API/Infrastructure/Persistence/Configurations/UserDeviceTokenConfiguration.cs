@@ -20,7 +20,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
             builder.HasIndex(t => t.UserId);
 
             builder.HasOne(t => t.User)
-                .WithMany()
+                .WithMany(u => u.UserDeviceTokens)
                 .HasForeignKey(t => t.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 

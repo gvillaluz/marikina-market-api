@@ -1,4 +1,7 @@
-﻿using MarikinaMarket.API.Application.DTOs.User.Request;
+﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
+using MarikinaMarket.API.Application.DTOs.Enforcers.Response;
+using MarikinaMarket.API.Application.DTOs.Tickets.Response;
+using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.User.Response;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
@@ -233,6 +236,7 @@ namespace MarikinaMarket.API.Application.Services
                 City = user.City,
                 Status = user.Status,
                 Role = role,
+                ProfileUrl = user.ProfilePictureUrl,
                 CreatedAt = user.CreatedAt,
                 MustChangedPassword = user.MustChangePassword
             };

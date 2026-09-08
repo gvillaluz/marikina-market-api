@@ -19,6 +19,7 @@ namespace MarikinaMarket.API.Application.DTOs.User.Response
         public AccountStatus Status { get; set; }
         public Role? Role { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string? ProfileUrl { get; set; }
         public bool MustChangedPassword { get; set; }
     }
 }

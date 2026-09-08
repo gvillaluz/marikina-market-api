@@ -286,10 +286,10 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
             tiers.AddRange(new[]
             {
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 1,
-                OffenseNumber = 1, Severity = Severity.Low,
+                OffenseNumber = 1, Severity = Severity.Minor,
                 PenaltyAmount = 1000.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 1,
-                OffenseNumber = 2, Severity = Severity.Medium,
+                OffenseNumber = 2, Severity = Severity.Moderate,
                 PenaltyAmount = 1500.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 1,
                 OffenseNumber = 3, Severity = Severity.High,
@@ -311,10 +311,10 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
             tiers.AddRange(new[]
             {
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 2,
-                OffenseNumber = 1, Severity = Severity.Low,
+                OffenseNumber = 1, Severity = Severity.Minor,
                 PenaltyAmount = 500.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 2,
-                OffenseNumber = 2, Severity = Severity.Medium,
+                OffenseNumber = 2, Severity = Severity.Moderate,
                 PenaltyAmount = 1000.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 2,
                 OffenseNumber = 3, Severity = Severity.High,
@@ -334,10 +334,10 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
             tiers.AddRange(new[]
             {
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 3,
-                OffenseNumber = 1, Severity = Severity.Low,
+                OffenseNumber = 1, Severity = Severity.Minor,
                 PenaltyAmount = 100.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 3,
-                OffenseNumber = 2, Severity = Severity.Medium,
+                OffenseNumber = 2, Severity = Severity.Moderate,
                 PenaltyAmount = 500.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 3,
                 OffenseNumber = 3, Severity = Severity.High,
@@ -357,7 +357,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
             tiers.AddRange(new[]
             {
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 4,
-                OffenseNumber = 1, Severity = Severity.Medium,
+                OffenseNumber = 1, Severity = Severity.Moderate,
                 PenaltyAmount = 1000.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 4,
                 OffenseNumber = 2, Severity = Severity.High,
@@ -380,7 +380,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Seeder
             tiers.AddRange(new[]
             {
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 5,
-                OffenseNumber = 1, Severity = Severity.Medium,
+                OffenseNumber = 1, Severity = Severity.Moderate,
                 PenaltyAmount = 1500.00m },
             new OrdinancePenaltyTier { Id = id++, OrdinanceId = 5,
                 OffenseNumber = 2, Severity = Severity.High,

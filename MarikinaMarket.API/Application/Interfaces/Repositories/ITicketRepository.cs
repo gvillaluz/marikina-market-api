@@ -1,4 +1,7 @@
-﻿using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
+﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Internal;
+using MarikinaMarket.API.Application.DTOs.Enforcers.Response;
+using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
+using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
@@ -7,8 +10,10 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface ITicketRepository
     {
+        Task<int> GetTotalTicketCountAsync(ViolationType? type);
         Task<Ticket?> GetTicketByIdAsync(int ticketId);
         Task<DashboardTicketCount> GetTicketCountAsync(int enforcerId);
+        Task<List<DailyTicketCount>> GetTicketsWithDateAsync(DateTime startOfThisMonth);
         Task<TicketDetailResponse?> GetTicketDetailAsync(int ticketId);
         Task<int> GetNewControlNumber();
         Task<bool> HasActiveWarningTicket(int vendorId);
@@ -26,6 +31,13 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
             int limit,
             TicketStatus status
         );
+        Task<List<AdminInspectionSummary>> GetAdminInspectionAsync(int offset, int limit, InspectionSummaryFilters filters);
+        Task<List<AdminTicketSummary>> GetAdminTicketAsync(int offset, int limit, TicketSummaryFilters filters);
+        Task<TicketAnalyticsRaw> GetTicketAnalyticsAsync(DateTime startOfThisMonth, DateTime startOfLastMonth);
+        Task<AdminTicketDetailResponse?> GetAdminTicketDetailAsync(int ticketId);
+        Task<List<Ticket>> GetNewlyOverdueTicketsAsync();
+        Task<List<AdminEnforcerTicketCount>> GetEnforcerTicketCountAsync(List<int> enforcerIds);
+        Task<List<TopEnforcerResponse>> GetTopEnforcersAsync(DateTime startOfThisMonth);
         void SetOriginalVersion(Ticket ticket, uint version);
         Task SaveChangesAsync();
     }

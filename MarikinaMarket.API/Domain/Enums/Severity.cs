@@ -2,8 +2,8 @@
 {
     public enum Severity
     {
-        Low,
-        Medium,
+        Minor,
+        Moderate,
         High
     }
 }

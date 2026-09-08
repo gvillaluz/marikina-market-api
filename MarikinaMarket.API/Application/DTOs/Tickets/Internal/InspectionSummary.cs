@@ -15,7 +15,7 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Internal
         public required string StallNumber { get; init; }
         public required int EnforcerId { get; init; }
         public required ViolationType Type { get; init; }
-        public required TicketStatus Status { get; init; }
+        public TicketStatus? Status { get; init; }
         public Severity? Severity { get; init; }
         public required List<string> Ordinances { get; init; } = [];
         public required DateTime IssuedAt { get; init; }

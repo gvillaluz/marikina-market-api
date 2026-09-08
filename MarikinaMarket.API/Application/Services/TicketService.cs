@@ -66,7 +66,7 @@ namespace MarikinaMarket.API.Application.Services
         {
             List<OrdinanceFineBreakdownItem> items = [];
             decimal totalPaymentAmount = 0;
-            Severity highestSeverity = Severity.Low;
+            Severity highestSeverity = Severity.Minor;
 
             List<int> duplicateIds = [];
 
@@ -170,13 +170,13 @@ namespace MarikinaMarket.API.Application.Services
                         MarketSectionId = vendor.MarketSectionId,
                         EnforcerId = request.EnforcerId,
                         Type = request.Type,
-                        Status = TicketStatus.Pending,
+                        Status = null,
                         Description = request.Description,
                         TotalPaymentAmount = null,
                         HighestSeverity = null,
                         PenaltyType = null,
                         CommunityServiceHours = null,
-                        ReceiptUrl = null,
+                        ReceiptUrls = [],
                         Categories = [.. ordinanceFineSummary.Breakdown.Select(o => o.Category)],
                         IssuedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow,
@@ -191,6 +191,9 @@ namespace MarikinaMarket.API.Application.Services
                     };
 
                     var newWarningTicket = await _ticketRepository.AddTicketAsync(warningTicket);
+
+                    if (newWarningTicket is null) 
+                        throw new ResourceCreationFailedException("Failed to create the ticket. Please try again.");
 
                     await _unitOfWork.SaveChangesAsync();
                     await _unitOfWork.CommitAsync();
@@ -227,10 +230,9 @@ namespace MarikinaMarket.API.Application.Services
                         Type = newWarningTicket.Type,
                         Severity = null,
                         OrdinanceNames = ordinanceFineSummary.Breakdown.Select(o => o.OrdinanceNo).ToList(),
-                        Status = newWarningTicket.Status,
+                        Status = newWarningTicket!.Status,
                         IssuedAt = newWarningTicket.IssuedAt,
                         OverdueDate = null,
-                        IsOverdue = false,
                         UpdatedAt = newWarningTicket.UpdatedAt,
                         DuplicateOrdinances = [],
                         WarningMessageForDuplicates = null
@@ -267,7 +269,7 @@ namespace MarikinaMarket.API.Application.Services
                     HighestSeverity = ordinanceFineSummary.HighestSeverity,
                     PenaltyType = request.PenaltyType,
                     CommunityServiceHours = request.CommunityServiceHours,
-                    ReceiptUrl = null,
+                    ReceiptUrls = [],
                     Categories = [..ordinanceFineSummary.Breakdown.Select(o => o.Category)],
                     IssuedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
@@ -320,7 +322,6 @@ namespace MarikinaMarket.API.Application.Services
                     OrdinanceNames = ordinanceFineSummary.Breakdown.Select(o => o.OrdinanceNo).ToList(),
                     Status = newTicket.Status,
                     IssuedAt = newTicket.IssuedAt,
-                    IsOverdue = DateTime.UtcNow > newTicket.IssuedAt.AddDays(15),
                     UpdatedAt = newTicket.UpdatedAt,
                     DuplicateOrdinances = duplicateOrdinances,
                     WarningMessageForDuplicates = $"{duplicateOrdinances.Count} ordinance(s) were excluded as active tickets already exist."
@@ -366,9 +367,6 @@ namespace MarikinaMarket.API.Application.Services
                 OverdueDate = t.Type == ViolationType.Ticket
                     ? t.IssuedAt.AddDays(15)
                     : null,
-                IsOverdue = t.Type == ViolationType.Ticket
-                    ? t.IssuedAt.AddDays(15) < DateTime.UtcNow
-                    : false,
                 UpdatedAt = t.UpdatedAt
             }).ToList();
 
@@ -405,10 +403,10 @@ namespace MarikinaMarket.API.Application.Services
                 MarketSectionName = t.MarketSectionName,
                 StallNumber = t.StallNumber,
                 EnforcerId = t.EnforcerId,
-                Status = t.Status,
+                Status = t.Status ?? TicketStatus.Pending,
                 IssuedAt = t.IssuedAt,
-                IsOverdue = t.IssuedAt.AddDays(15) < DateTime.UtcNow,
-                UpdatedAt = t.UpdatedAt
+                UpdatedAt = t.UpdatedAt,
+                OverdueDate = t.IssuedAt.AddDays(15)
             }).ToList();
 
             return new PageResponse<TicketSummaryResponse>
@@ -476,10 +474,179 @@ namespace MarikinaMarket.API.Application.Services
             {
                 TicketId = ticket.Id,
                 ControlNumber = ticket!.ControlNumber!,
-                Status = ticket.Status,
+                Status = ticket.Status ?? TicketStatus.Cleared,
                 UpdatedAt = ticket.UpdatedAt,
                 Version = ticket.Version
             };
+        }
+
+        public async Task<PageResponse<AdminInspectionSummaryResponse>> GetAdminInspectionAsync(int offset, InspectionSummaryFilters filters)
+        {
+            offset = Math.Max(offset, 0);
+
+            var inspections = await _ticketRepository.GetAdminInspectionAsync(offset, PAGE_SIZE, filters);
+
+            if (inspections is null || inspections.Count == 0)
+                return new PageResponse<AdminInspectionSummaryResponse> { Items = [], HasMore = false };
+
+            bool hasMore = inspections.Count() > PAGE_SIZE;
+            if (hasMore)
+                inspections.RemoveAt(inspections.Count - 1);
+
+            var totalCount = await _ticketRepository.GetTotalTicketCountAsync(null);
+
+            var inspectionResponse = inspections.Select(t => new AdminInspectionSummaryResponse
+            {
+                TicketId = t.Id,
+                EnforcerId = t.EnforcerId,
+                EnforcerLastName = t.EnforcerLastName,
+                EnforcerFirstName = t.EnforcerFirstName,
+                VendorId = t.VendorId,
+                VendorLastName = t.VendorLastName,
+                VendorFirstName = t.VendorFirstName,
+                StallNumber = t.StallNumber,
+                BusinessName = t.BusinessName,
+                MarketSectionId = t.MarketSectionId,
+                MarketSectionName = t.MarketSectionName,
+                Type = t.Type,
+                IssuedAt = t.IssuedAt
+            }).ToList();
+
+            return new PageResponse<AdminInspectionSummaryResponse>
+            {
+                Items = inspectionResponse,
+                HasMore = hasMore,
+                Total = totalCount
+            };
+        }
+
+        public async Task<PageResponse<AdminTicketSummary>> GetAdminTicketAsync(int offset, TicketSummaryFilters filters)
+        {
+            offset = Math.Max(offset, 0);
+
+            var inspections = await _ticketRepository.GetAdminTicketAsync(offset, PAGE_SIZE, filters);
+
+            if (inspections is null || inspections.Count == 0)
+                return new PageResponse<AdminTicketSummary> { Items = [], HasMore = false };
+
+            bool hasMore = inspections.Count() > PAGE_SIZE;
+            if (hasMore)
+                inspections.RemoveAt(inspections.Count - 1);
+
+            var totalCount = await _ticketRepository.GetTotalTicketCountAsync(ViolationType.Ticket);
+
+            var inspectionResponse = inspections.Select(t => new AdminTicketSummary
+            {
+                Id = t.Id,
+                ControlNumber = t.ControlNumber,
+                EnforcerId = t.EnforcerId,
+                EnforcerLastName = t.EnforcerLastName,
+                EnforcerFirstName = t.EnforcerFirstName,
+                VendorId = t.VendorId,
+                VendorLastName = t.VendorLastName,
+                VendorFirstName = t.VendorFirstName,
+                StallNumber = t.StallNumber,
+                MarketSectionId = t.MarketSectionId,
+                MarketSectionName = t.MarketSectionName,
+                Status = t.Status,
+                Severity = t.Severity,
+                PenaltyType = t.PenaltyType,
+                TotalPaymentAmount = t.TotalPaymentAmount,
+                IssuedAt = t.IssuedAt
+            }).ToList();
+
+            return new PageResponse<AdminTicketSummary>
+            {
+                Items = inspectionResponse,
+                HasMore = hasMore,
+                Total = totalCount
+            };
+        }
+
+        public async Task<TicketAnalyticsResponse> GetTicketAnalyticsAsync()
+        {
+            var now = DateTime.UtcNow;
+            var startOfThisMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var startOfLastMonth = startOfThisMonth.AddMonths(-1);
+
+            var rawAnalytics = await _ticketRepository.GetTicketAnalyticsAsync(startOfThisMonth, startOfLastMonth);
+
+            return new TicketAnalyticsResponse
+            {
+                TotalTicketsThisMonth = rawAnalytics.TotalTicketsThisMonth,
+                TicketChangePercentage = CalculatePercentChange(rawAnalytics.TotalTicketsLastMonth, rawAnalytics.TotalTicketsThisMonth) ?? 0,
+
+                PendingPaymentsThisMonth = rawAnalytics.PaymentsThisMonth,
+                PaymentsChangePercentage = rawAnalytics.PaymentsLastMonth == 0
+                    ? 0
+                    : Math.Round((double)((rawAnalytics.PaymentsThisMonth - rawAnalytics.PaymentsLastMonth)
+                        / rawAnalytics.PaymentsLastMonth) * 100, 1),
+
+                ResolvedViolationsThisMonth = rawAnalytics.ResolvedViolationsThisMonth,
+                ResolutionRate = rawAnalytics.TotalTicketsThisMonth == 0 
+                    ? 0 
+                    : Math.Round((double) rawAnalytics.ResolvedViolationsThisMonth / rawAnalytics.TotalTicketsThisMonth * 100, 1),
+
+                HighSeveritiesThisMonth = rawAnalytics.HighSeveritiesThisMonth,
+                HighSeveritiesChangePercentage = CalculatePercentChange(rawAnalytics.HighSeveritiesLastMonth, rawAnalytics.HighSeveritiesThisMonth) ?? 0
+            };
+        }
+
+        public async Task<AdminTicketDetailResponse> GetAdminTicketDetailAsync(int ticketId)
+        {
+            var ticket = await _ticketRepository.GetAdminTicketDetailAsync(ticketId);
+
+            Console.WriteLine(ticketId);
+
+            if (ticket is null) throw new RecordNotFoundException("Ticket not found");
+
+            return ticket;
+        }
+
+        public async Task<int> CheckAndNotifyOverdueTicketsAsync()
+        {
+            var newlyOverdueTickets = await _ticketRepository.GetNewlyOverdueTicketsAsync();
+
+            foreach (var ticket in newlyOverdueTickets)
+            {
+                ticket.Status = TicketStatus.Overdue;
+                ticket.UpdatedAt = DateTime.UtcNow;
+
+                await _notificationService.SendPushNotificationAsync(
+                    ticket.EnforcerId,
+                    $"Ticket #{ticket.ControlNumber} Overdue",
+                    $"{ticket.Vendor?.BusinessName}'s ticket is now overdue. Payment was due 15 days ago."
+                );
+
+                if (!string.IsNullOrEmpty(ticket.Vendor?.User?.Email))
+                {
+                    string subject = $"Overdue Notice - Control No. {ticket.ControlNumber}";
+                    string body = $"Dear {ticket.Vendor.User.FirstName} {ticket.Vendor.User.LastName},\n\n" +
+                        $"This is to inform you that your ticket has now become overdue.\n\n" +
+                        $"Control No.: {ticket.ControlNumber}\n" +
+                        $"Total Penalty: PHP {ticket.TotalPaymentAmount:N2}\n" +
+                        $"Original Due Date: {ticket.IssuedAt.AddDays(15):MMMM dd, yyyy}\n\n" +
+                        $"Please settle your outstanding balance as soon as possible to avoid further administrative action, " +
+                        $"including additional penalties or suspension of your stall permit.\n\n" +
+                        $"If you wish to contest this ticket, please visit the market administration office to file an appeal.\n\n" +
+                        $"Thank you for your prompt attention to this matter.\n\n" +
+                        $"Sincerely,\n" +
+                        $"Market Administration Office";
+
+                    await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
+                }
+            }
+
+            if (newlyOverdueTickets.Count > 0)
+                await _ticketRepository.SaveChangesAsync();
+
+            return newlyOverdueTickets.Count;
+        }
+
+        private static double? CalculatePercentChange(int previous, int current)
+        {
+            if (previous == 0) return null;
+            return Math.Round((double)(current - previous) / previous * 100, 1);
         }
     }
 }

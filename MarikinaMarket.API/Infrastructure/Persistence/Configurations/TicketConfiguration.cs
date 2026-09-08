@@ -37,8 +37,8 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
             builder.Property(x => x.TotalPaymentAmount)
                 .HasPrecision(18, 2);
 
-            builder.Property(x => x.ReceiptUrl)
-                .HasMaxLength(1000);
+            builder.Property(x => x.ReceiptUrls)
+                .HasColumnType("text[]");
 
             builder.Property(x => x.HighestSeverity)
                 .HasConversion<string>();

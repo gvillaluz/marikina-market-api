@@ -17,13 +17,13 @@ namespace MarikinaMarket.API.Domain.Entities
         public User? Enforcer { get; set; }
 
         public ViolationType Type { get; set; }
-        public TicketStatus Status { get; set; }
+        public TicketStatus? Status { get; set; }
         public required string Description { get; set; }
         public decimal? TotalPaymentAmount { get; set; }
         public Severity? HighestSeverity { get; set; }
         public PenaltyType? PenaltyType { get; set; }
         public int? CommunityServiceHours { get; set; }
-        public string? ReceiptUrl { get; set; }
+        public List<string>? ReceiptUrls { get; set; }
         public List<ViolationCategory> Categories { get; set; } = [];
         public DateTime IssuedAt { get; set; }
         public DateTime UpdatedAt { get; set; }

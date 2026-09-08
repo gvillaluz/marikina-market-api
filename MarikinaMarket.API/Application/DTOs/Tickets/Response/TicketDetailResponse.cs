@@ -23,6 +23,7 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Response
         public required string Description { get; set; }
         public Severity? Severity { get; set; }
         public PenaltyType? PenaltyType { get; set; }
+        public TicketStatus? Status { get; set; }
         public DateTime? DueDate { get; set; }
         public decimal? TotalFineAmount { get; set; }
         public List<String>? TicketEvidences { get; set; } = [];
