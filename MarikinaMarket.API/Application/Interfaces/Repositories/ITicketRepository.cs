@@ -38,6 +38,9 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         Task<List<Ticket>> GetNewlyOverdueTicketsAsync();
         Task<List<AdminEnforcerTicketCount>> GetEnforcerTicketCountAsync(List<int> enforcerIds);
         Task<List<TopEnforcerResponse>> GetTopEnforcersAsync(DateTime startOfThisMonth);
+        Task<DateTime> GetLastEnforcerInspectionAsync(int enforcerId);
+        Task<PerformanceSummaryResponse?> GetEnforcerPerformanceSummaryAsync(int enforcerId, DateTime yearStart);
+        Task<List<InspectionSummary>> GetEnforcerInspectionHistory(int enforcerId, int offset, int limit);
         void SetOriginalVersion(Ticket ticket, uint version);
         Task SaveChangesAsync();
     }

@@ -8,5 +8,8 @@ namespace MarikinaMarket.API.Application.Interfaces
     {
         Task<PageResponse<AdminEnforcerSummaryResponse>> GetEnforcerSummaryAsync(int offset, EnforcerSummaryFilter filters);
         Task<ActivityPanelDataResponse> GetDailyTicketsAverage();
+        Task<EnforcerInfoResponse> GetProfileAsync(int enforcerId);
+        Task<PerformanceSummaryResponse> GetPerformanceSummaryAsync(int enforcerId);
+        Task<PageResponse<InspectionResponse>> GetInspectionHistoryAsync(int enforcerId, int offset);
     }
 }

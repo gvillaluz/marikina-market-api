@@ -456,5 +456,84 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Take(5)
                 .ToListAsync();
         }
+
+        public async Task<PerformanceSummaryResponse?> GetEnforcerPerformanceSummaryAsync(int enforcerId, DateTime yearStart)
+        {
+            var totals = await _context.Tickets
+                .Where(t => t.EnforcerId == enforcerId)
+                .GroupBy(t => 1)
+                .Select(g => new
+                {
+                    Total = g.Count(),
+                    Resolved = g.Count(t => t.Status == TicketStatus.Paid || t.Status == TicketStatus.Waived),
+                    Warnings = g.Count(t => t.Type == ViolationType.Warning),
+                    Tickets = g.Count(t => t.Type == ViolationType.Ticket),
+                })
+                .FirstOrDefaultAsync();
+
+            if (totals is null || totals.Total == 0)
+                return null;
+
+            var monthly = await _context.Tickets
+                .Where(t => t.EnforcerId == enforcerId && t.IssuedAt >= yearStart)
+                .GroupBy(t => t.IssuedAt.Month)
+                .Select(g => new MonthInspectionResponse
+                {
+                    Month = g.Key,
+                    TotalIssuedTickets = g.Count(),
+                })
+                .ToListAsync();
+
+            var monthlyFilled = Enumerable.Range(1, 12)
+                .Select(m => monthly.FirstOrDefault(x => x.Month == m) ?? new MonthInspectionResponse { Month = m, TotalIssuedTickets = 0 })
+                .ToList();
+
+            return new PerformanceSummaryResponse
+            {
+                EnforcerId = enforcerId,
+                TotalInspections = totals.Total,
+                ResolutionRate = Math.Round((double)totals.Resolved / totals.Total * 100, 1),
+                WarningRatio = Math.Round((double)totals.Warnings / totals.Total * 100, 1),
+                TicketRatio = Math.Round((double)totals.Tickets / totals.Total * 100, 1),
+                MonthlyInspections = monthlyFilled,
+            };
+        }
+
+        public async Task<DateTime> GetLastEnforcerInspectionAsync(int enforcerId)
+        {
+            return await _context.Tickets
+                .Where(t => t.EnforcerId == enforcerId)
+                .OrderByDescending(t => t.IssuedAt)
+                .Select(t => t.IssuedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<List<InspectionSummary>> GetEnforcerInspectionHistory(int enforcerId, int offset, int limit)
+        {
+            return await _context.Tickets
+                .Where(t => t.EnforcerId == enforcerId)
+                .OrderByDescending(t => t.IssuedAt)
+                .Skip(offset)
+                .Take(limit + 1)
+                .Select(t => new InspectionSummary
+                {
+                    Id = t.Id,
+                    ControlNumber = t.ControlNumber!,
+                    VendorId = t.VendorId,
+                    LastName = t.Vendor!.User!.LastName,
+                    FirstName = t.Vendor.User.FirstName,
+                    BusinessName = t.Vendor.BusinessName,
+                    MarketSectionId = t.MarketSectionId,
+                    MarketSectionName = t.MarketSection!.Name,
+                    StallNumber = t.Vendor.StallNumber,
+                    EnforcerId = t.EnforcerId,
+                    Type = t.Type,
+                    Status = t.Status,
+                    Severity = t.HighestSeverity,
+                    Ordinances = t.TicketViolations.Select(tv => tv.Ordinance!.OrdinanceNo).ToList(),
+                    IssuedAt = t.IssuedAt,
+                    UpdatedAt = t.UpdatedAt
+                }).ToListAsync();
+        }
     }
 }
