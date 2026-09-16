@@ -23,7 +23,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     Id = v.Id,
                     LastName = v.User!.LastName,
                     FirstName = v.User.FirstName,
-                    Email = v.User!.Email,
+                    Email = v.User!.Email!,
                     MarketSectionId = v.MarketSectionId,
                     MarketSectionName = v.MarketSection!.Name,
                     BusinessName = v.BusinessName,
@@ -36,9 +36,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         {
             var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
             var warningTicket = await _context.Tickets
+                .AsNoTracking()
                 .Where(t => t.VendorId == vendorId
                     && t.Type == ViolationType.Warning
-                    && t.Status == TicketStatus.Pending
                     && t.IssuedAt >= sevenDaysAgo)
                 .FirstOrDefaultAsync();
 
@@ -55,10 +55,11 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
 
             var activeWarnings = await _context.Tickets
+                .AsNoTracking()
                 .Where(t => vendorIds.Contains(t.VendorId)
                     && t.Type == ViolationType.Warning
-                    && t.Status == TicketStatus.Pending
                     && t.IssuedAt >= sevenDaysAgo)
+                .Select(t => new { t.VendorId, t.IssuedAt })
                 .ToListAsync();
 
             return vendorIds.Select(id =>
@@ -111,7 +112,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Select(v => new VendorLookupResult
                 {
                     VendorId = v.Id,
-                    Username = v.User.UserName,
+                    Username = v.User!.UserName!,
                     StallNumber = v.StallNumber,
                     TradeName = v.BusinessName,
                     LastName = v.User.LastName,
@@ -119,7 +120,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     MiddleName = v.User.MiddleName,
                     Address = "",
                     MarketSectionId = v.MarketSectionId,
-                    MarketSectionName = v.MarketSection.Name
+                    MarketSectionName = v.MarketSection!.Name
                 })
                 .ToListAsync();
         }
@@ -131,7 +132,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Select(v => new VendorLookupResult
                 {
                     VendorId = v.Id,
-                    Username = v.User.UserName,
+                    Username = v.User!.UserName!,
                     StallNumber = v.StallNumber,
                     TradeName = v.BusinessName,
                     LastName = v.User.LastName,
@@ -139,7 +140,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     MiddleName = v.User.MiddleName,
                     Address = "",
                     MarketSectionId = v.MarketSectionId,
-                    MarketSectionName = v.MarketSection.Name
+                    MarketSectionName = v.MarketSection!.Name
                 })
                 .FirstOrDefaultAsync();
         }

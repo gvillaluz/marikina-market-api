@@ -20,5 +20,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
         Task<IdentityResult> MandatoryChangePasswordAsync(ChangePasswordRequest request, int userId);
         Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId, bool clearMandatoryFlag = false);
         Task RegisterDeviceTokenAsync(int userId, string deviceToken);
+        Task<UserProfileResponse> ChangeProfilePhoto(int userId, IFormFile file);
+        Task<UserProfileResponse> RemoveProfilePhoto(int userId);
     }
 }

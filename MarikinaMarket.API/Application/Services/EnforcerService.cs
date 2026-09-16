@@ -141,6 +141,8 @@ namespace MarikinaMarket.API.Application.Services
             if (hasMore)
                 inspections.RemoveAt(inspections.Count - 1);
 
+            var totalInspections = await _ticketRepository.GetTotalIssuedTicketsByEnforcerIdAsync(enforcerId);
+
             var inspectionResponse = inspections.Select(i => new InspectionResponse
             {
                 TicketId = i.Id,
@@ -158,7 +160,8 @@ namespace MarikinaMarket.API.Application.Services
             return new PageResponse<InspectionResponse>
             {
                 Items = inspectionResponse,
-                HasMore = hasMore
+                HasMore = hasMore,
+                Total = totalInspections
             };
         }
     }

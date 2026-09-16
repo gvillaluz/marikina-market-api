@@ -17,6 +17,7 @@ namespace MarikinaMarket.API.Application.Services
     {
         private readonly IUserRepository _userRepository;
         private readonly ITokenService _tokenService;
+        private readonly IStorageService _storageService;
         private readonly IUnitOfWork _unitOfWork;
 
         private const int RENEW_AFTER_DAYS = 7;
@@ -25,10 +26,12 @@ namespace MarikinaMarket.API.Application.Services
         public UserService(
             IUserRepository userRepository, 
             ITokenService tokenService,
+            IStorageService storageService,
             IUnitOfWork unitOfWork)
         {
             _userRepository = userRepository;
             _tokenService = tokenService;
+            _storageService = storageService;
             _unitOfWork = unitOfWork;
         }
 
@@ -282,6 +285,7 @@ namespace MarikinaMarket.API.Application.Services
                 Status = user.Status,
                 Role = role,
                 CreatedAt = user.CreatedAt,
+                ProfileUrl = user.ProfilePictureUrl,
                 MustChangedPassword = user.MustChangePassword
             };
         }
@@ -335,6 +339,111 @@ namespace MarikinaMarket.API.Application.Services
                 await _userRepository.AddDeviceTokenAsync(userDeviceToken);
             }
             await _userRepository.SaveChangesAsync();
+        }
+
+        public async Task<UserProfileResponse> ChangeProfilePhoto(int userId, IFormFile file)
+        {
+            var user = await _userRepository.GetUserAsync(userId);
+
+            if (user is null)
+                throw new RecordNotFoundException("User not found.");
+
+            if (user.ProfilePictureUrl != null && string.IsNullOrEmpty(user.ProfilePictureUrl))
+            {
+                await _storageService.DeleteFileAsync(B2BucketType.General, user.ProfilePictureUrl);
+            }
+
+            var generatedFileKey = GenerateFileKey(file);
+
+            var fileKey = await _storageService.UploadFileAsync(B2BucketType.General, file, generatedFileKey);
+
+            user.ProfilePictureUrl = fileKey;
+
+            var updateResult = await _userRepository.UpdateUserAsync(user);
+
+            if (!updateResult.Succeeded)
+            {
+                var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
+                throw new ValidationException(errors);
+            }
+
+            var presignedUrl = await _storageService.GetPresignedUrlAsync(B2BucketType.General, fileKey);
+
+            var role = await _userRepository.GetRoleAsync(user);
+
+            return new UserProfileResponse
+            {
+                UserId = user.Id,
+                Username = user.UserName ?? "",
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                MiddleName = user.MiddleName,
+                Email = user.Email ?? "",
+                DateOfBirth = user.DateOfBirth,
+                MobileNumber = user.PhoneNumber ?? "",
+                HouseNumber = user.HouseNumber,
+                Street = user.Street,
+                Barangay = user.Barangay,
+                City = user.City,
+                Status = user.Status,
+                Role = role,
+                CreatedAt = user.CreatedAt,
+                ProfileUrl = presignedUrl,
+                MustChangedPassword = user.MustChangePassword
+            };
+        }
+
+        public async Task<UserProfileResponse> RemoveProfilePhoto(int userId)
+        {
+            var user = await _userRepository.GetUserAsync(userId);
+
+            if (user is null)
+                throw new RecordNotFoundException("User not found.");
+
+            if (user.ProfilePictureUrl is not null)
+            {
+                await _storageService.DeleteFileAsync(B2BucketType.General, user.ProfilePictureUrl);   
+            }
+
+            user.ProfilePictureUrl = null;
+
+            var updateResult = await _userRepository.UpdateUserAsync(user);
+
+            if (!updateResult.Succeeded)
+            {
+                var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
+                throw new ValidationException(errors);
+            }
+
+            var role = await _userRepository.GetRoleAsync(user);
+
+            return new UserProfileResponse
+            {
+                UserId = user.Id,
+                Username = user.UserName ?? "",
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                MiddleName = user.MiddleName,
+                Email = user.Email ?? "",
+                DateOfBirth = user.DateOfBirth,
+                MobileNumber = user.PhoneNumber ?? "",
+                HouseNumber = user.HouseNumber,
+                Street = user.Street,
+                Barangay = user.Barangay,
+                City = user.City,
+                Status = user.Status,
+                Role = role,
+                CreatedAt = user.CreatedAt,
+                ProfileUrl = user.ProfilePictureUrl,
+                MustChangedPassword = user.MustChangePassword
+            };
+        }
+
+        private static string GenerateFileKey(IFormFile file)
+        {
+            string fileExtension = Path.GetExtension(file.FileName);
+            string datePath = DateTime.UtcNow.ToString("yyyy/MM");
+            return $"tickets/{datePath}/{Guid.NewGuid()}{fileExtension}";
         }
     }
 }

@@ -5,7 +5,6 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 namespace MarikinaMarket.API.Presentation.Controllers
@@ -24,7 +23,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
         {
             if (request == null)
-                return Unauthorized("Request data must not be null or empty.");
+                return BadRequest("Request data must not be null or empty.");
 
             return Ok(await _userService.LoginAsync(request));
         }
@@ -59,30 +58,8 @@ namespace MarikinaMarket.API.Presentation.Controllers
             return Ok(await _userService.RefreshTokensAsync(request));
         }
 
-        [Authorize]
-        [HttpPost("profile")]
-        public async Task<ActionResult<UserProfileResponse>> EditUserInformation([FromBody] EditUserRequest request)
-        {
-            var userId = GetUserIdFromClaims();
-            var userProfile = await _userService.UpdateUserInfo(request, userId);
-
-            return Ok(userProfile);
-        }
-
-        [Authorize]
-        [HttpPost("me")]
-        public async Task<ActionResult<UserProfileResponse>> GetLoggedInUserInfo()
-        {
-            var userId = GetUserIdFromClaims();
-
-            var userProfile = await _userService.GetUserInfoAsync(userId);
-
-            return Ok(userProfile);
-        }
-
-        [Authorize]
         [HttpPost("mandatory-change-password")]
-        public async Task<IActionResult> MandatoryChangePassword([FromBody] ChangePasswordRequest request)
+        public async Task<ActionResult> MandatoryChangePassword([FromBody] ChangePasswordRequest request)
         {
             var userId = GetUserIdFromClaims();
 
@@ -94,12 +71,11 @@ namespace MarikinaMarket.API.Presentation.Controllers
                 return BadRequest(new { code = "PASSWORD_CHANGE_FAILED", message = errors });
             }
 
-            return NoContent();
+            return Ok();
         }
 
-        [Authorize]
         [HttpPost("change-password")]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             var userId = GetUserIdFromClaims();
             var result = await _userService.ChangePasswordAsync(request, userId);
@@ -110,16 +86,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
                 return BadRequest(new { code = "PASSWORD_CHANGE_FAILED", message = errors });
             }
 
-            return NoContent();
-        }
-
-        [HttpPost("device-token")]
-        [Authorize(Roles = nameof(Role.Enforcer))]
-        public async Task<IActionResult> RegisterDeviceToken([FromBody] RegisterDeviceTokenRequest request)
-        {
-            var userId = GetUserIdFromClaims();
-            await _userService.RegisterDeviceTokenAsync(userId, request.DeviceToken);
-            return Ok(new { message = "Device token registered." });
+            return Ok();
         }
 
         private int GetUserIdFromClaims()

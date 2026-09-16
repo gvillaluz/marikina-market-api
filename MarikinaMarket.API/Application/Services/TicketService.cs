@@ -1,4 +1,5 @@
-﻿using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
+﻿using System.Diagnostics;
+using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
@@ -7,8 +8,6 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens.Experimental;
-using Microsoft.OpenApi;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -18,8 +17,8 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IOrdinanceRepository _ordinanceRepository;
         private readonly IVendorRepository _vendorRepository;
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IFileStorage _fileStorage;
         private readonly INotificationService _notificationService;
+        private readonly IStorageService _storageService;
         private readonly int PAGE_SIZE = 10;
 
         public TicketService(
@@ -27,7 +26,7 @@ namespace MarikinaMarket.API.Application.Services
             IOrdinanceRepository ordinanceRepository,
             IVendorRepository vendorRepository,
             IUnitOfWork unitOfWork,
-            IFileStorage fileStorage,
+            IStorageService storageService,
             INotificationService notificationService
             )
         {
@@ -35,7 +34,7 @@ namespace MarikinaMarket.API.Application.Services
             _ordinanceRepository = ordinanceRepository;
             _vendorRepository = vendorRepository;
             _unitOfWork = unitOfWork;
-            _fileStorage = fileStorage;
+            _storageService = storageService;
             _notificationService = notificationService;
         }
 
@@ -47,7 +46,7 @@ namespace MarikinaMarket.API.Application.Services
             {
                 TicketRecorded = ticketCount.TicketRecorded,
                 WarningRecorded = ticketCount.WarningRecorded,
-                TotalRecorded = ticketCount.TotalRecorded  
+                TotalRecorded = ticketCount.TotalRecorded
             };
         }
 
@@ -77,9 +76,9 @@ namespace MarikinaMarket.API.Application.Services
 
             foreach (var ordinance in ordinances)
             {
-                int offenseNumber = persist 
-                    ? ordinance.OffenseCount + 1 
-                    : ordinance.OffenseCount <= 0 
+                int offenseNumber = persist
+                    ? ordinance.OffenseCount + 1
+                    : ordinance.OffenseCount <= 0
                         ? 1
                         : ordinance.OffenseCount;
                 bool IsDuplicate = duplicateIds.Contains(ordinance.OrdinanceId);
@@ -95,7 +94,7 @@ namespace MarikinaMarket.API.Application.Services
                 {
                     totalPaymentAmount += applicableTier.PenaltyAmount;
 
-                    if (applicableTier.Severity > highestSeverity)  
+                    if (applicableTier.Severity > highestSeverity)
                         highestSeverity = applicableTier.Severity;
                 }
 
@@ -126,6 +125,8 @@ namespace MarikinaMarket.API.Application.Services
 
             try
             {
+
+                var stopwatch = Stopwatch.StartNew();
                 var vendor = await _vendorRepository.GetByIdAsync(request.VendorId);
 
                 if (vendor is null)
@@ -135,14 +136,14 @@ namespace MarikinaMarket.API.Application.Services
 
                 if (duplicateOrdinances.Any())
                 {
-                    foreach (var ordinance in  duplicateOrdinances) Console.WriteLine("Removing ordinance id:" + ordinance);
+                    foreach (var ordinance in duplicateOrdinances) Console.WriteLine("Removing ordinance id:" + ordinance);
                     request.Ordinances.RemoveAll(o => duplicateOrdinances.Select(o => o.OrdinanceId).Contains(o));
                 }
 
                 if (!request.Ordinances.Any())
                 {
                     throw new DuplicateOrdinanceException(
-                        "All selected ordinances already have active tickets issued for this vendor today.",
+                        "All selected ordinance(s) already have active tickets issued for this vendor today.",
                         duplicateOrdinances
                     );
                 }
@@ -192,7 +193,7 @@ namespace MarikinaMarket.API.Application.Services
 
                     var newWarningTicket = await _ticketRepository.AddTicketAsync(warningTicket);
 
-                    if (newWarningTicket is null) 
+                    if (newWarningTicket is null)
                         throw new ResourceCreationFailedException("Failed to create the ticket. Please try again.");
 
                     await _unitOfWork.SaveChangesAsync();
@@ -242,13 +243,30 @@ namespace MarikinaMarket.API.Application.Services
                 var newControlNumber = await _ticketRepository.GetNewControlNumber();
                 var ticketEvidences = new List<TicketEvidence>();
 
-                foreach (var file in request.TicketEvidenceFiles)
+                if (request.TicketEvidenceFiles != null && request.TicketEvidenceFiles.Any())
                 {
-                    string url = await _fileStorage.SaveFileAsync(file, "evidences");
-                    ticketEvidences.Add(new TicketEvidence
+                    Dictionary<IFormFile, string> filesWithKeys = new Dictionary<IFormFile, string>();
+
+                    foreach (var file in request.TicketEvidenceFiles)
                     {
-                        EvidenceUrl = url
-                    });
+                        Console.WriteLine(
+                            $"Evidence: {file.FileName} | " +
+                            $"{file.Length / 1024.0 / 1024.0:F2} MB | " +
+                            $"{file.ContentType}"
+                        );
+                        filesWithKeys[file] = GenerateFileKey(file);
+                    }
+
+                    var keys = await _storageService.UploadEvidencesAsync(filesWithKeys);
+                    Console.WriteLine($"Image upload: {stopwatch.ElapsedMilliseconds} ms");
+
+                    foreach (var key in keys)
+                    {
+                        ticketEvidences.Add(new TicketEvidence
+                        {
+                            FileKey = key
+                        });
+                    }
                 }
 
                 bool isCashFine = request.PenaltyType == PenaltyType.CashFine;
@@ -265,12 +283,12 @@ namespace MarikinaMarket.API.Application.Services
                     Type = request.Type,
                     Status = TicketStatus.Pending,
                     Description = request.Description,
-                    TotalPaymentAmount = ordinanceFineSummary.TotalPaymentAmount,
+                    TotalPaymentAmount = isCashFine ? ordinanceFineSummary.TotalPaymentAmount : null,
                     HighestSeverity = ordinanceFineSummary.HighestSeverity,
                     PenaltyType = request.PenaltyType,
                     CommunityServiceHours = request.CommunityServiceHours,
                     ReceiptUrls = [],
-                    Categories = [..ordinanceFineSummary.Breakdown.Select(o => o.Category)],
+                    Categories = [.. ordinanceFineSummary.Breakdown.Select(o => o.Category)],
                     IssuedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
                     TicketViolations = ordinanceFineSummary.Breakdown
@@ -304,6 +322,8 @@ namespace MarikinaMarket.API.Application.Services
 
                     await _notificationService.SendEmailAsync(vendor.Email, subject, body);
                 }
+
+                Console.WriteLine($"Commit: {stopwatch.ElapsedMilliseconds} ms");
 
                 return new InspectionSummaryResponse
                 {
@@ -378,8 +398,8 @@ namespace MarikinaMarket.API.Application.Services
         }
 
         public async Task<PageResponse<TicketSummaryResponse>> GetTicketsByEnforcerIdAsync(
-            int enforcerId, 
-            int offset, 
+            int enforcerId,
+            int offset,
             TicketStatus status
             )
         {
@@ -420,8 +440,25 @@ namespace MarikinaMarket.API.Application.Services
         {
             var ticketDetail = await _ticketRepository.GetTicketDetailAsync(ticketId);
 
-            if (ticketDetail == null)
+            if (ticketDetail is null)
                 throw new RecordNotFoundException("Ticket not found.");
+
+            if (ticketDetail.TicketEvidences!.Any())
+            {
+                Dictionary<string, string> keysWithUrls = await _storageService.GetPresignedUrlsAsync(
+                    B2BucketType.Evidence,
+                    ticketDetail.TicketEvidences!
+                );
+
+                var presignedUrls = new List<string>();
+
+                foreach (var key in ticketDetail.TicketEvidences!)
+                {
+                    presignedUrls.Add(keysWithUrls[key]);
+                }
+
+                ticketDetail.TicketEvidences = presignedUrls;
+            }
 
             return ticketDetail;
         }
@@ -469,6 +506,8 @@ namespace MarikinaMarket.API.Application.Services
                 $"Ticket #{ticket.ControlNumber} Updated",
                 $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}."
             );
+
+            await _notificationService.SaveNotificationAsync(ticket.Id, ticket.EnforcerId, $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.", ticket.Status ?? TicketStatus.Pending);
 
             return new UpdateStatusResponse
             {
@@ -583,9 +622,9 @@ namespace MarikinaMarket.API.Application.Services
                         / rawAnalytics.PaymentsLastMonth) * 100, 1),
 
                 ResolvedViolationsThisMonth = rawAnalytics.ResolvedViolationsThisMonth,
-                ResolutionRate = rawAnalytics.TotalTicketsThisMonth == 0 
-                    ? 0 
-                    : Math.Round((double) rawAnalytics.ResolvedViolationsThisMonth / rawAnalytics.TotalTicketsThisMonth * 100, 1),
+                ResolutionRate = rawAnalytics.TotalTicketsThisMonth == 0
+                    ? 0
+                    : Math.Round((double)rawAnalytics.ResolvedViolationsThisMonth / rawAnalytics.TotalTicketsThisMonth * 100, 1),
 
                 HighSeveritiesThisMonth = rawAnalytics.HighSeveritiesThisMonth,
                 HighSeveritiesChangePercentage = CalculatePercentChange(rawAnalytics.HighSeveritiesLastMonth, rawAnalytics.HighSeveritiesThisMonth) ?? 0
@@ -596,9 +635,24 @@ namespace MarikinaMarket.API.Application.Services
         {
             var ticket = await _ticketRepository.GetAdminTicketDetailAsync(ticketId);
 
-            Console.WriteLine(ticketId);
-
             if (ticket is null) throw new RecordNotFoundException("Ticket not found");
+
+            if (ticket.TicketEvidences!.Any())
+            {
+                Dictionary<string, string> keysWithUrls = await _storageService.GetPresignedUrlsAsync(
+                    B2BucketType.Evidence,
+                    ticket.TicketEvidences!
+                );
+
+                var presignedUrls = new List<string>();
+
+                foreach (var key in ticket.TicketEvidences!)
+                {
+                    presignedUrls.Add(keysWithUrls[key]);
+                }
+
+                ticket.TicketEvidences = presignedUrls;
+            }
 
             return ticket;
         }
@@ -609,6 +663,7 @@ namespace MarikinaMarket.API.Application.Services
 
             foreach (var ticket in newlyOverdueTickets)
             {
+                var previousStatus = ticket.Status;
                 ticket.Status = TicketStatus.Overdue;
                 ticket.UpdatedAt = DateTime.UtcNow;
 
@@ -616,6 +671,12 @@ namespace MarikinaMarket.API.Application.Services
                     ticket.EnforcerId,
                     $"Ticket #{ticket.ControlNumber} Overdue",
                     $"{ticket.Vendor?.BusinessName}'s ticket is now overdue. Payment was due 15 days ago."
+                );
+
+                await _notificationService.SaveNotificationAsync(
+                    ticket.Id, 
+                    ticket.EnforcerId, 
+                    $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.", ticket.Status ?? TicketStatus.Pending
                 );
 
                 if (!string.IsNullOrEmpty(ticket.Vendor?.User?.Email))
@@ -647,6 +708,13 @@ namespace MarikinaMarket.API.Application.Services
         {
             if (previous == 0) return null;
             return Math.Round((double)(current - previous) / previous * 100, 1);
+        }
+
+        private static string GenerateFileKey(IFormFile file)
+        {
+            string fileExtension = Path.GetExtension(file.FileName);
+            string datePath = DateTime.UtcNow.ToString("yyyy/MM");
+            return $"tickets/{datePath}/{Guid.NewGuid()}{fileExtension}";
         }
     }
 }

@@ -6,6 +6,6 @@
         public int TicketId { get; set; }
         public Ticket? Ticket { get; set; }
 
-        public required string EvidenceUrl { get; set; }
+        public required string FileKey { get; set; }
     }
 }

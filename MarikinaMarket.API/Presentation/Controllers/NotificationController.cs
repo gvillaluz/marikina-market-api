@@ -19,7 +19,9 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
         [HttpGet]
         [Authorize(Roles = nameof(Role.Enforcer))]
-        public async Task<ActionResult<List<GetNotificationsResponse>>> GetNotifications()
+        public async Task<ActionResult<List<GetNotificationsResponse>>> GetNotifications(
+            [FromQuery] int offset = 0,
+            [FromQuery] string filter = "All")
         {
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (userIdString == null || !int.TryParse(userIdString, out var userId))
@@ -27,7 +29,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
                 throw new UnauthorizedAccessException("Invalid or missing identity token context.");
             }
 
-            return Ok(await _service.GetNotificationsByEnforcerIdAsync(userId));
+            return Ok(await _service.GetNotificationsByEnforcerIdAsync(userId, offset, filter));
         }
     }
 }

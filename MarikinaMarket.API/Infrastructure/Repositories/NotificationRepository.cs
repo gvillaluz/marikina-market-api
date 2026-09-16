@@ -11,13 +11,29 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public NotificationRepository(AppDbContext context) => _context = context;
 
-        public async Task<List<Notification>> GetNotificationsAsync(int enforcerId)
+        public async Task<List<Notification>> GetNotificationsAsync(int enforcerId, int limit, int offset, string filter)
         {
-            return await _context.Notifications
+            var query = _context.Notifications
                 .Where(n => n.EnforcerId == enforcerId)
+                .AsQueryable();
+
+            if (filter == "Unread") query = query.Where(n => !n.IsRead);
+
+            return await query
+                .Include(n => n.Ticket!)
+                    .ThenInclude(t => t!.MarketSection)
+                .Include(n => n.Ticket!)
+                    .ThenInclude(t => t!.Vendor)
                 .OrderByDescending(n => n.CreatedAt)
+                .Skip(offset)
+                .Take(limit + 1)
                 .AsNoTracking()
                 .ToListAsync();
+        }
+
+        public async Task SaveNotificationAsync(Notification notification)
+        {
+            await _context.Notifications.AddAsync(notification);
         }
     }
 }

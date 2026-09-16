@@ -77,6 +77,7 @@ builder.Services.AddSingleton<IEmailService, EmailService>();
 builder.Services.AddSingleton<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEnforcerService, EnforcerService>();
+builder.Services.AddScoped<IStorageService, StorageService>();
 
 builder.Services.AddAuthentication(options =>
 {

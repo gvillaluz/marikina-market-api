@@ -91,7 +91,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     DueDate = t.Type == ViolationType.Ticket
                         ? t.IssuedAt.AddDays(15) : null,
                     TotalFineAmount = t.TotalPaymentAmount ?? null,
-                    TicketEvidences = t.TicketEvidences!.Select(e => e.EvidenceUrl).ToList() ?? new List<string>(),
+                    TicketEvidences = t.TicketEvidences!.Select(e => e.FileKey).ToList() ?? new List<string>(),
                 })
                 .FirstOrDefaultAsync();
         }
@@ -376,7 +376,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     DueDate = t.Type == ViolationType.Ticket
                         ? t.IssuedAt.AddDays(15) : null,
                     TotalFineAmount = t.TotalPaymentAmount ?? null,
-                    TicketEvidences = t.TicketEvidences!.Select(e => e.EvidenceUrl).ToList() ?? new List<string>(),
+                    TicketEvidences = t.TicketEvidences!.Select(e => e.FileKey).ToList() ?? new List<string>(),
                     Status = t.Status,
                     EnforcerFirstName = t.Enforcer!.FirstName,
                     EnforcerLastName = t.Enforcer.LastName,
@@ -534,6 +534,13 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     IssuedAt = t.IssuedAt,
                     UpdatedAt = t.UpdatedAt
                 }).ToListAsync();
+        }
+
+        public async Task<int> GetTotalIssuedTicketsByEnforcerIdAsync(int enforcerId)
+        {
+            return await _context.Tickets
+                .Where(t => t.EnforcerId == enforcerId)
+                .CountAsync();
         }
     }
 }

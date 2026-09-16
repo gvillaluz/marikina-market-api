@@ -13,7 +13,7 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
                 .HasForeignKey(t => t.TicketId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.Property(t => t.EvidenceUrl)
+            builder.Property(t => t.FileKey)
                 .HasMaxLength(1000);
         }
     }
