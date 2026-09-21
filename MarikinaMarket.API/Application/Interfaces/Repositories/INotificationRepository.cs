@@ -6,5 +6,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
     {
         Task<List<Notification>> GetNotificationsAsync(int enforcerId, int limit, int offset, string filter);
         Task SaveNotificationAsync(Notification notification);
+        Task<Notification?> GetNotificationByIdAsync(int notificationId, int enforcerId);
+        Task SaveChangesAsync();
     }
 }

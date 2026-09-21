@@ -34,12 +34,10 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<WarningCheck> CheckHasWarning(int vendorId)
         {
-            var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
             var warningTicket = await _context.Tickets
                 .AsNoTracking()
                 .Where(t => t.VendorId == vendorId
-                    && t.Type == ViolationType.Warning
-                    && t.IssuedAt >= sevenDaysAgo)
+                    && t.Type == ViolationType.Warning)
                 .FirstOrDefaultAsync();
 
             return new WarningCheck
@@ -57,8 +55,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             var activeWarnings = await _context.Tickets
                 .AsNoTracking()
                 .Where(t => vendorIds.Contains(t.VendorId)
-                    && t.Type == ViolationType.Warning
-                    && t.IssuedAt >= sevenDaysAgo)
+                    && t.Type == ViolationType.Warning)
                 .Select(t => new { t.VendorId, t.IssuedAt })
                 .ToListAsync();
 

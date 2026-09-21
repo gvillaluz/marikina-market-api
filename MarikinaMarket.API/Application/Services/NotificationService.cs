@@ -49,6 +49,9 @@ namespace MarikinaMarket.API.Application.Services
                 ControlNumber = n.Ticket!.ControlNumber!,
                 TradeName = n.Ticket.Vendor!.BusinessName,
                 MarketSectionName = n.Ticket.MarketSection!.Name,
+                PenaltyType = n.Ticket.PenaltyType ?? PenaltyType.CashFine,
+                TotalFineAmount = n.Ticket.TotalPaymentAmount,
+                DueDate = n.Ticket.IssuedAt.AddDays(5),
                 Status = n.Status,
                 Message = n.Message,
                 IsRead = n.IsRead,
@@ -103,6 +106,18 @@ namespace MarikinaMarket.API.Application.Services
             }
 
             return anySucceeded;
+        }
+
+        public async Task MarkAsReadNotificationAsync(int notificationId, int enforcerId)
+        {
+            var notification = await _notificationRepository.GetNotificationByIdAsync(notificationId, enforcerId);
+
+            if (notification is null) 
+                throw new RecordNotFoundException("Notification record not found.");
+
+            notification.IsRead = true;
+
+            await _notificationRepository.SaveChangesAsync();
         }
     }
 }

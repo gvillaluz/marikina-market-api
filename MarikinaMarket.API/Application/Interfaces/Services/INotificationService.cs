@@ -10,5 +10,6 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
         Task SendEmailAsync(string toEmail, string subject, string body);
         Task<PageResponse<GetNotificationsResponse>> GetNotificationsByEnforcerIdAsync(int enforcerId, int offset, string filter);
         Task SaveNotificationAsync(int ticketId, int enforcerId, string message, TicketStatus status);
+        Task MarkAsReadNotificationAsync(int notificationId, int enforcerId);
     }
 }

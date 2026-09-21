@@ -31,9 +31,27 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<Notification?> GetNotificationByIdAsync(int notificationId, int enforcerId)
+        {
+            return await _context.Notifications.FirstOrDefaultAsync(n => n.Id == notificationId && n.EnforcerId == enforcerId);
+        }
+
         public async Task SaveNotificationAsync(Notification notification)
         {
             await _context.Notifications.AddAsync(notification);
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                Console.WriteLine(ex.Message);
+                throw new Exception("A database error occured while saving the changes.");
+            }
         }
     }
 }

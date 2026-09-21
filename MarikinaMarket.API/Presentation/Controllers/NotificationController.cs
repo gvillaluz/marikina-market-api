@@ -31,5 +31,29 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
             return Ok(await _service.GetNotificationsByEnforcerIdAsync(userId, offset, filter));
         }
+
+        [HttpPatch("{notificationId}/read")]
+        [Authorize(Roles = nameof(Role.Enforcer))]
+        public async Task<ActionResult> MarkAsRead([FromRoute] int notificationId)
+        {
+            if (notificationId <= 0) 
+                return BadRequest("Notification identification must not be invalid.");
+            
+            int userId = GetUserIdFromClaims();
+
+            await _service.MarkAsReadNotificationAsync(notificationId, userId);
+
+            return NoContent();
+        }
+
+        private int GetUserIdFromClaims()
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdString == null || !int.TryParse(userIdString, out var userId))
+            {
+                throw new UnauthorizedAccessException("Invalid or missing identity token context.");
+            }
+            return userId;
+        }
     }
 }

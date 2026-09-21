@@ -89,7 +89,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     PenaltyType = t.PenaltyType ?? null,
                     Status = t.Status,
                     DueDate = t.Type == ViolationType.Ticket
-                        ? t.IssuedAt.AddDays(15) : null,
+                        ? t.IssuedAt.AddDays(5) : null,
                     TotalFineAmount = t.TotalPaymentAmount ?? null,
                     TicketEvidences = t.TicketEvidences!.Select(e => e.FileKey).ToList() ?? new List<string>(),
                 })

@@ -125,8 +125,6 @@ namespace MarikinaMarket.API.Application.Services
 
             try
             {
-
-                var stopwatch = Stopwatch.StartNew();
                 var vendor = await _vendorRepository.GetByIdAsync(request.VendorId);
 
                 if (vendor is null)
@@ -249,16 +247,10 @@ namespace MarikinaMarket.API.Application.Services
 
                     foreach (var file in request.TicketEvidenceFiles)
                     {
-                        Console.WriteLine(
-                            $"Evidence: {file.FileName} | " +
-                            $"{file.Length / 1024.0 / 1024.0:F2} MB | " +
-                            $"{file.ContentType}"
-                        );
                         filesWithKeys[file] = GenerateFileKey(file);
                     }
 
                     var keys = await _storageService.UploadEvidencesAsync(filesWithKeys);
-                    Console.WriteLine($"Image upload: {stopwatch.ElapsedMilliseconds} ms");
 
                     foreach (var key in keys)
                     {
@@ -322,8 +314,6 @@ namespace MarikinaMarket.API.Application.Services
 
                     await _notificationService.SendEmailAsync(vendor.Email, subject, body);
                 }
-
-                Console.WriteLine($"Commit: {stopwatch.ElapsedMilliseconds} ms");
 
                 return new InspectionSummaryResponse
                 {
@@ -477,6 +467,12 @@ namespace MarikinaMarket.API.Application.Services
 
             try
             {
+                await _notificationService.SaveNotificationAsync(
+                    ticket.Id, 
+                    ticket.EnforcerId, 
+                    $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.", 
+                    ticket.Status ?? TicketStatus.Pending
+                );
                 await _ticketRepository.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException)
@@ -506,8 +502,6 @@ namespace MarikinaMarket.API.Application.Services
                 $"Ticket #{ticket.ControlNumber} Updated",
                 $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}."
             );
-
-            await _notificationService.SaveNotificationAsync(ticket.Id, ticket.EnforcerId, $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.", ticket.Status ?? TicketStatus.Pending);
 
             return new UpdateStatusResponse
             {

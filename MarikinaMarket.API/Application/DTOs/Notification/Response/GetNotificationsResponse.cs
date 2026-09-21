@@ -10,6 +10,9 @@ namespace MarikinaMarket.API.Application.DTOs.Notification.Response
         public required string ControlNumber { get; set; }
         public required string TradeName { get; set; }
         public required string MarketSectionName { get; set; }
+        public PenaltyType PenaltyType { get; set; }
+        public decimal? TotalFineAmount { get; set; }
+        public DateTime DueDate { get; set; }
         public TicketStatus Status { get; set; }
         public required string Message { get; set; }
         public bool IsRead { get; set; }
