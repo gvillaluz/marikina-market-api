@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Net;
 using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
@@ -8,7 +8,6 @@ using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
-using Microsoft.EntityFrameworkCore;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -51,10 +50,150 @@ namespace MarikinaMarket.API.Application.Services
             };
         }
 
-        public async Task<TicketSettlementResponse> SubmitTicketSettlementAsync(
+        public async Task<TicketReceiptProofResponse> GetTicketReceiptProofAsync(int ticketId, int enforcerId)
+        {
+            var ticket = await GetTicketForSettlementAsync(ticketId, enforcerId);
+
+            if (ticket.PenaltyType is not (PenaltyType.CashFine or PenaltyType.BloodDonation))
+                throw new InvalidRequestException("Receipt proof is only available for cash fine or blood donation tickets.");
+
+            return await BuildTicketReceiptProofResponseAsync(ticket);
+        }
+
+        public async Task<CommunityServiceProgressResponse> GetCommunityServiceProgressAsync(int ticketId, int enforcerId)
+        {
+            var ticket = await GetTicketForSettlementAsync(ticketId, enforcerId);
+
+            if (ticket.PenaltyType != PenaltyType.CommunityService)
+                throw new InvalidRequestException("Community service logs are only available for community service tickets.");
+
+            return await BuildCommunityServiceProgressAsync(ticket);
+        }
+
+        public async Task<TicketReceiptProofResponse> SubmitTicketReceiptProofAsync(
             int ticketId,
             int enforcerId,
-            SubmitTicketSettlementRequest request)
+            SubmitTicketReceiptProofRequest request)
+        {
+            var ticket = await GetTicketForSettlementAsync(ticketId, enforcerId);
+
+            if (ticket.PenaltyType is not (PenaltyType.CashFine or PenaltyType.BloodDonation))
+                throw new InvalidRequestException("Receipt proof is only accepted for cash fine or blood donation tickets.");
+
+            var proofKey = await UploadSettlementProofAsync(request.ProofFile);
+
+            ticket.ProofUrls ??= [];
+            ticket.ProofUrls.Add(proofKey);
+            ticket.UpdatedAt = DateTime.UtcNow;
+            await _unitOfWork.SaveChangesAsync();
+
+            return await BuildTicketReceiptProofResponseAsync(ticket);
+        }
+
+        public async Task<CommunityServiceProgressResponse> LogCommunityServiceHoursAsync(
+            int ticketId,
+            int enforcerId,
+            SubmitCommunityServiceLogRequest request)
+        {
+            var ticket = await GetTicketForSettlementAsync(ticketId, enforcerId);
+
+            if (ticket.PenaltyType != PenaltyType.CommunityService)
+                throw new InvalidRequestException("Community service entries are only accepted for community service tickets.");
+
+            ValidateCommunityServiceLog(ticket, request);
+
+            var completedHours = ticket.CommunityServiceLogs.Sum(log => log.HoursWorked);
+            var requiredHours = ticket.CommunityServiceHours!.Value;
+            var hoursWorked = request.HoursWorked!.Value;
+
+            if (completedHours + hoursWorked > requiredHours)
+            {
+                var remainingHours = requiredHours - completedHours;
+                throw new InvalidRequestException($"Hours worked cannot exceed the remaining {remainingHours:0.##} community service hours.");
+            }
+
+            var proofKey = await UploadSettlementProofAsync(request.ProofFile);
+
+            ticket.CommunityServiceLogs.Add(new CommunityServiceLog
+            {
+                TicketId = ticket.Id,
+                ServiceDate = DateTime.SpecifyKind(request.ServiceDate!.Value.Date, DateTimeKind.Utc),
+                HoursWorked = hoursWorked,
+                ProofUrl = proofKey,
+                RecordedById = enforcerId,
+                CreatedAt = DateTime.UtcNow
+            });
+            ticket.UpdatedAt = DateTime.UtcNow;
+            await _unitOfWork.SaveChangesAsync();
+
+            return await BuildCommunityServiceProgressAsync(ticket);
+        }
+
+        private async Task<TicketReceiptProofResponse> BuildTicketReceiptProofResponseAsync(Ticket ticket)
+        {
+            var proofKeys = ticket.ProofUrls ?? [];
+            var proofUrls = await _storageService.GetPresignedUrlsAsync(B2BucketType.Evidence, proofKeys);
+
+            return new TicketReceiptProofResponse
+            {
+                TicketId = ticket.Id,
+                PenaltyType = ticket.PenaltyType!.Value,
+                ProofUrls = proofKeys.Select(key => proofUrls[key]).ToList()
+            };
+        }
+
+        private async Task<CommunityServiceProgressResponse> BuildCommunityServiceProgressAsync(Ticket ticket)
+        {
+            if (!ticket.CommunityServiceHours.HasValue || ticket.CommunityServiceHours.Value <= 0)
+                throw new InvalidRequestException("The ticket does not have a valid community service hour requirement.");
+
+            var logs = ticket.CommunityServiceLogs
+                .OrderBy(log => log.ServiceDate)
+                .ThenBy(log => log.CreatedAt)
+                .ToList();
+            var proofUrls = await _storageService.GetPresignedUrlsAsync(B2BucketType.Evidence, logs.Select(log => log.ProofUrl));
+            var requiredHours = ticket.CommunityServiceHours.Value;
+            var completedHours = logs.Sum(log => log.HoursWorked);
+
+            return new CommunityServiceProgressResponse
+            {
+                TicketId = ticket.Id,
+                HoursRequired = requiredHours,
+                HoursCompleted = completedHours,
+                HoursRemaining = requiredHours - completedHours,
+                CompletionPercentage = Math.Min(100m, Math.Round(completedHours / requiredHours * 100m, 1)),
+                Entries = logs.Select(log => new CommunityServiceLogResponse
+                {
+                    ServiceDate = log.ServiceDate,
+                    HoursWorked = log.HoursWorked,
+                    ProofUrl = proofUrls[log.ProofUrl]
+                }).ToList()
+            };
+        }
+
+        private static void ValidateCommunityServiceLog(
+            Ticket ticket,
+            SubmitCommunityServiceLogRequest request)
+        {
+            if (!request.ServiceDate.HasValue)
+                throw new InvalidRequestException("Service date is required.");
+
+            if (request.ServiceDate.Value.Date > DateTime.UtcNow.Date)
+                throw new InvalidRequestException("Service date cannot be in the future.");
+
+            if (!request.HoursWorked.HasValue
+                || request.HoursWorked.Value < 0.01m
+                || request.HoursWorked.Value > 999.99m)
+                throw new InvalidRequestException("Hours worked must be between 0.01 and 999.99.");
+
+            if (decimal.Round(request.HoursWorked.Value, 2) != request.HoursWorked.Value)
+                throw new InvalidRequestException("Hours worked must not have more than two decimal places.");
+
+            if (!ticket.CommunityServiceHours.HasValue || ticket.CommunityServiceHours.Value <= 0)
+                throw new InvalidRequestException("The ticket does not have a valid community service hour requirement.");
+        }
+
+        private async Task<Ticket> GetTicketForSettlementAsync(int ticketId, int enforcerId)
         {
             var ticket = await _ticketRepository.GetTicketByIdAsync(ticketId);
 
@@ -67,107 +206,21 @@ namespace MarikinaMarket.API.Application.Services
             if (ticket.Type != ViolationType.Ticket)
                 throw new InvalidRequestException("Settlement proof can only be submitted for violation tickets.");
 
-            if (ticket.PenaltyType is not (PenaltyType.CashFine or PenaltyType.BloodDonation or PenaltyType.CommunityService))
-                throw new InvalidRequestException("The ticket does not have a supported penalty type.");
+            if (!ticket.PenaltyType.HasValue)
+                throw new InvalidRequestException("The ticket does not have a penalty type.");
 
-            var proofFile = request.ProofFile;
-            ValidateSettlementProof(proofFile);
+            return ticket;
+        }
 
-            if (ticket.PenaltyType == PenaltyType.CommunityService)
-            {
-                if (!request.ServiceDate.HasValue || !request.HoursWorked.HasValue)
-                    throw new InvalidRequestException("Service date and hours worked are required for community service.");
+        private async Task<string> UploadSettlementProofAsync(IFormFile? file)
+        {
+            ValidateSettlementProof(file);
 
-                if (request.ServiceDate.Value.Date > DateTime.UtcNow.Date)
-                    throw new InvalidRequestException("Service date cannot be in the future.");
+            var proofFile = file!;
+            var proofKey = GenerateFileKey(proofFile);
+            await _storageService.UploadEvidenceAsync(proofFile, proofKey);
 
-                if (request.HoursWorked.Value <= 0)
-                    throw new InvalidRequestException("Hours worked must be greater than zero.");
-
-                if (!ticket.CommunityServiceHours.HasValue || ticket.CommunityServiceHours.Value <= 0)
-                    throw new InvalidRequestException("The ticket does not have a valid community service hour requirement.");
-
-                var completedHours = ticket.CommunityServiceLogs.Sum(log => log.HoursWorked);
-                if (completedHours + request.HoursWorked.Value > ticket.CommunityServiceHours.Value)
-                {
-                    var remainingHours = ticket.CommunityServiceHours.Value - completedHours;
-                    throw new InvalidRequestException($"Hours worked cannot exceed the remaining {remainingHours:0.##} community service hours.");
-                }
-            }
-
-            var proofKey = GenerateFileKey(proofFile!);
-            await _storageService.UploadEvidenceAsync(proofFile!, proofKey);
-
-            if (ticket.PenaltyType == PenaltyType.CommunityService)
-            {
-                ticket.CommunityServiceLogs.Add(new CommunityServiceLog
-                {
-                    TicketId = ticket.Id,
-                    ServiceDate = DateTime.SpecifyKind(request.ServiceDate!.Value.Date, DateTimeKind.Utc),
-                    HoursWorked = request.HoursWorked!.Value,
-                    ProofUrl = proofKey,
-                    RecordedById = enforcerId,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-            else
-            {
-                ticket.ProofUrls ??= [];
-                ticket.ProofUrls.Add(proofKey);
-            }
-
-            ticket.UpdatedAt = DateTime.UtcNow;
-            try
-            {
-                await _unitOfWork.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                throw new ConcurrencyConflictException("The ticket has been updated by another user. Please refresh and try again.");
-            }
-
-            var response = new TicketSettlementResponse
-            {
-                TicketId = ticket.Id,
-                PenaltyType = ticket.PenaltyType.Value
-            };
-
-            if (ticket.PenaltyType == PenaltyType.CommunityService)
-            {
-                var logs = ticket.CommunityServiceLogs
-                    .OrderBy(log => log.ServiceDate)
-                    .ThenBy(log => log.CreatedAt)
-                    .ToList();
-                var proofUrls = await _storageService.GetPresignedUrlsAsync(
-                    B2BucketType.Evidence,
-                    logs.Select(log => log.ProofUrl));
-                var requiredHours = ticket.CommunityServiceHours!.Value;
-                var completedHours = logs.Sum(log => log.HoursWorked);
-
-                response.CommunityServiceHoursRequired = requiredHours;
-                response.CommunityServiceHoursCompleted = completedHours;
-                response.CommunityServiceHoursRemaining = requiredHours - completedHours;
-                response.CommunityServiceCompletionPercentage = Math.Min(
-                    100m,
-                    Math.Round(completedHours / requiredHours * 100m, 1));
-                response.CommunityServiceLogs = logs.Select(log => new CommunityServiceLogResponse
-                {
-                    ServiceDate = log.ServiceDate,
-                    HoursWorked = log.HoursWorked,
-                    ProofUrl = proofUrls[log.ProofUrl]
-                }).ToList();
-            }
-            else
-            {
-                var proofUrls = await _storageService.GetPresignedUrlsAsync(
-                    B2BucketType.Evidence,
-                    ticket.ProofUrls ?? []);
-                response.ProofUrls = (ticket.ProofUrls ?? [])
-                    .Select(key => proofUrls[key])
-                    .ToList();
-            }
-
-            return response;
+            return proofKey;
         }
 
         public async Task<FineSummaryResponse> GetOffenseCountsAndPaymentBy(List<int> ordinanceIds, int vendorId)
@@ -196,21 +249,22 @@ namespace MarikinaMarket.API.Application.Services
 
             foreach (var ordinance in ordinances)
             {
-                int offenseNumber = persist
-                    ? ordinance.OffenseCount + 1
-                    : ordinance.OffenseCount <= 0
-                        ? 1
-                        : ordinance.OffenseCount;
-                bool IsDuplicate = duplicateIds.Contains(ordinance.OrdinanceId);
+                var isDuplicate = duplicateIds.Contains(ordinance.OrdinanceId);
 
-                if (persist && !IsDuplicate)
+                int offenseNumber;
+                if (persist)
+                    offenseNumber = ordinance.OffenseCount + 1;
+                else
+                    offenseNumber = ordinance.OffenseCount;
+
+                if (persist && !isDuplicate)
                     ordinance.OffenseCount = offenseNumber;
 
                 var applicableTier = ordinance.PenaltyTiers
                     .FirstOrDefault(pt => pt.OffenseNumber == offenseNumber)
                     ?? ordinance.PenaltyTiers.OrderByDescending(pt => pt.OffenseNumber).First();
 
-                if (!IsDuplicate)
+                if (!isDuplicate)
                 {
                     totalPaymentAmount += applicableTier.PenaltyAmount;
 
@@ -227,7 +281,7 @@ namespace MarikinaMarket.API.Application.Services
                     PaymentAmount = applicableTier.PenaltyAmount,
                     Severity = applicableTier.Severity,
                     Category = ordinance.Category,
-                    IsDuplicate = IsDuplicate
+                    IsDuplicate = isDuplicate
                 });
             }
 
@@ -270,7 +324,7 @@ namespace MarikinaMarket.API.Application.Services
 
                 var ordinanceFineSummary = BuildFineSummary(
                     ordinanceWithTiers,
-                    persist: request.Type != ViolationType.Warning
+                    persist: request.Type == ViolationType.Ticket
                 );
 
                 if (request.Type == ViolationType.Warning)
@@ -611,20 +665,13 @@ namespace MarikinaMarket.API.Application.Services
             ticket.Status = request.NewStatus;
             ticket.UpdatedAt = DateTime.UtcNow;
 
-            try
-            {
-                await _notificationService.SaveNotificationAsync(
-                    ticket.Id, 
-                    ticket.EnforcerId, 
-                    $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.", 
-                    ticket.Status ?? TicketStatus.Pending
-                );
-                await _ticketRepository.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                throw new ConcurrencyConflictException("The ticket has been updated by another user. Please refresh and try again.");
-            }
+            await _notificationService.SaveNotificationAsync(
+                ticket.Id,
+                ticket.EnforcerId,
+                $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.",
+                ticket.Status ?? TicketStatus.Pending
+            );
+            await _ticketRepository.SaveChangesAsync();
 
             if (!string.IsNullOrEmpty(ticket?.Vendor?.User?.Email))
             {
@@ -895,16 +942,21 @@ namespace MarikinaMarket.API.Application.Services
                 throw new InvalidRequestException("A settlement proof file is required.");
 
             const long maxFileSize = 5 * 1024 * 1024;
+
             if (file.Length > maxFileSize)
                 throw new InvalidRequestException("Settlement proof files must not exceed 5 MB.");
 
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            var isJpeg = (extension is ".jpg" or ".jpeg")
-                && string.Equals(file.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase);
-            var isPng = extension == ".png"
-                && string.Equals(file.ContentType, "image/png", StringComparison.OrdinalIgnoreCase);
-            if (!isJpeg && !isPng)
-                throw new InvalidRequestException("Settlement proof must be a JPG or PNG image.");
+
+            if (extension is ".jpg" or ".jpeg"
+                && string.Equals(file.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (extension == ".png"
+                && string.Equals(file.ContentType, "image/png", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            throw new InvalidRequestException("Settlement proof must be a JPG or PNG image.");
         }
     }
 }

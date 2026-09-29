@@ -36,7 +36,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                             PenaltyAmount = pt.PenaltyAmount
                         }).ToList(),
                     OffenseCount = o.TicketViolations
-                        .Count(tv => tv.Ticket!.VendorId == vendorId)
+                        .Count(tv => tv.Ticket!.VendorId == vendorId
+                            && tv.Ticket.Type == ViolationType.Ticket)
                 })
                 .ToListAsync();
         }

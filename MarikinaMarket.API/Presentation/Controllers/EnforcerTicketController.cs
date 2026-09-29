@@ -40,11 +40,8 @@ namespace MarikinaMarket.API.Presentation.Controllers
             return Ok(await _service.GetTicketDetailByIdAsync(id));
         }
 
-        [HttpPost("{id:int}/settlement")]
-        [Consumes("multipart/form-data")]
-        public async Task<ActionResult<TicketSettlementResponse>> SubmitTicketSettlement(
-            [FromRoute] int id,
-            [FromForm] SubmitTicketSettlementRequest request)
+        [HttpGet("{id:int}/settlement/receipt")]
+        public async Task<ActionResult<TicketReceiptProofResponse>> GetTicketReceiptProof([FromRoute] int id)
         {
             if (id <= 0)
                 return BadRequest("Ticket identification must not be empty.");
@@ -53,7 +50,52 @@ namespace MarikinaMarket.API.Presentation.Controllers
             if (!int.TryParse(userIdClaim, out var enforcerId) || enforcerId <= 0)
                 return Unauthorized("Invalid token.");
 
-            return Ok(await _service.SubmitTicketSettlementAsync(id, enforcerId, request));
+            return Ok(await _service.GetTicketReceiptProofAsync(id, enforcerId));
+        }
+
+        [HttpGet("{id:int}/settlement/community-service")]
+        public async Task<ActionResult<CommunityServiceProgressResponse>> GetCommunityServiceProgress([FromRoute] int id)
+        {
+            if (id <= 0)
+                return BadRequest("Ticket identification must not be empty.");
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var enforcerId) || enforcerId <= 0)
+                return Unauthorized("Invalid token.");
+
+            return Ok(await _service.GetCommunityServiceProgressAsync(id, enforcerId));
+        }
+
+        [HttpPost("{id:int}/settlement/receipt")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<TicketReceiptProofResponse>> SubmitTicketReceiptProof(
+            [FromRoute] int id,
+            [FromForm] SubmitTicketReceiptProofRequest request)
+        {
+            if (id <= 0)
+                return BadRequest("Ticket identification must not be empty.");
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var enforcerId) || enforcerId <= 0)
+                return Unauthorized("Invalid token.");
+
+            return Ok(await _service.SubmitTicketReceiptProofAsync(id, enforcerId, request));
+        }
+
+        [HttpPost("{id:int}/settlement/community-service")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<CommunityServiceProgressResponse>> LogCommunityServiceHours(
+            [FromRoute] int id,
+            [FromForm] SubmitCommunityServiceLogRequest request)
+        {
+            if (id <= 0)
+                return BadRequest("Ticket identification must not be empty.");
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var enforcerId) || enforcerId <= 0)
+                return Unauthorized("Invalid token.");
+
+            return Ok(await _service.LogCommunityServiceHoursAsync(id, enforcerId, request));
         }
 
         [HttpPost("new-inspection")]
@@ -114,5 +156,6 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
             return Ok(await _service.GetOffenseCountsAndPaymentBy(request.OrdinanceIds, request.VendorId));
         }
+
     }
 }

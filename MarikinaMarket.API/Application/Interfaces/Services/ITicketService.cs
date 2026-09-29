@@ -9,7 +9,10 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
     {
         Task<MobileDashboardSummaryResponse> GetMobileTicketCountAsync(int enforcerId);
         Task<TicketDetailResponse> GetTicketDetailByIdAsync(int ticketId);
-        Task<TicketSettlementResponse> SubmitTicketSettlementAsync(int ticketId, int enforcerId, SubmitTicketSettlementRequest request);
+        Task<TicketReceiptProofResponse> GetTicketReceiptProofAsync(int ticketId, int enforcerId);
+        Task<CommunityServiceProgressResponse> GetCommunityServiceProgressAsync(int ticketId, int enforcerId);
+        Task<TicketReceiptProofResponse> SubmitTicketReceiptProofAsync(int ticketId, int enforcerId, SubmitTicketReceiptProofRequest request);
+        Task<CommunityServiceProgressResponse> LogCommunityServiceHoursAsync(int ticketId, int enforcerId, SubmitCommunityServiceLogRequest request);
         Task<InspectionSummaryResponse> CreateTicketAsync(CreateTicketRequest request);
         Task<FineSummaryResponse> GetOffenseCountsAndPaymentBy(List<int> ordinanceIds, int vendorId);
         Task<PageResponse<InspectionSummaryResponse>> GetInspectionsByEnforcerIdAsync(int enforcerId, int offset, ViolationType type, string search);
