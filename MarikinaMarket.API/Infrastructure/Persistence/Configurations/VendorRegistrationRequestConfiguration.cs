@@ -21,6 +21,16 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
             builder.Property(v => v.BusinessDocumentPhotoUrl)
                 .HasMaxLength(1000);
 
+            builder.Property(v => v.BusinessId)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            builder.HasIndex(v => v.BusinessId)
+                .IsUnique();
+
+            builder.Property(t => t.Type)
+                .HasConversion<string>();
+
             builder.Property(v => v.BusinessName)
                 .HasMaxLength(150);
 

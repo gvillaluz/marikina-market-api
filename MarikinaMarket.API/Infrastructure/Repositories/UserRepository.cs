@@ -153,6 +153,11 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             return await query.CountAsync();
         }
 
+        public Task<IdentityResult> ResetPasswordByUsernameAsync(User user, string resetToken, string newPassword)
+        {
+            return _userManager.ResetPasswordAsync(user, resetToken, newPassword);
+        }
+
         private IQueryable<User> ApplyEnforcerFilters(IQueryable<User> query, EnforcerSummaryFilter filters)
         {
             query = query.Where(u => _context.UserRoles
@@ -174,6 +179,11 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             }
 
             return query;
+        }
+
+        public async Task<string> GenerateResetPassTokenAsync(User user)
+        {
+            return await _userManager.GeneratePasswordResetTokenAsync(user);
         }
     }
 }

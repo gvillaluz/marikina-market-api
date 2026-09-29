@@ -63,6 +63,7 @@ namespace MarikinaMarket.API.Application.Services
                 GovernmentIdNumber = request.GovernmentIdNumber,
                 GovernmentIdPhotoUrl = request.GovernmentIdPhotoUrl,
                 BusinessDocumentPhotoUrl = request.BusinessDocumentPhotoUrl,
+                BusinessId = request.BusinessId,
                 BusinessName = request.BusinessName,
                 NatureOfBusiness = request.NatureOfBusiness,
                 FirstName = request.FirstName,
@@ -147,6 +148,7 @@ namespace MarikinaMarket.API.Application.Services
                 {
                     UserId = newUser.Id,
                     MarketSectionId = marketSection.Id,
+                    BusinessId = registration.BusinessId,
                     BusinessName = registration.BusinessName,
                     StallNumber = registration.StallNumber,
                     QrCodeValue = GenerateUniqueQrToken()
@@ -242,9 +244,9 @@ namespace MarikinaMarket.API.Application.Services
             return Convert.ToHexString(bytes).ToLowerInvariant();
         }
 
-        public async Task<List<GetVendorResponse>> GetVendorByStallNumberAsync(string stallNumber)
+        public async Task<List<GetVendorResponse>> GetVendorByBusinessIdAsync(string businessId)
         {
-            var vendors = await _vendorRepository.GetVendorByStallNumber(stallNumber);
+            var vendors = await _vendorRepository.GetVendorByBusinessId(businessId);
 
             var vendorIdsWithWarning = await _vendorRepository.CheckHasWarningList(vendors.Select(v => v.VendorId).ToList());
             var warningLookup = vendorIdsWithWarning.ToDictionary(w => w.VendorId);
@@ -257,12 +259,14 @@ namespace MarikinaMarket.API.Application.Services
                         
                         VendorId = v.VendorId,
                         Username = v.Username,
+                        Type = v.Type,
+                        BusinessId = v.BusinessId,
                         StallNumber = v.StallNumber,
                         TradeName = v.TradeName,
                         LastName = v.LastName,
                         FirstName = v.FirstName,
                         MiddleName = v.MiddleName,
-                        Address = "",
+                        Address = v.Address ?? "",
                         MarketSectionId = v.MarketSectionId,
                         MarketSectionName = v.MarketSectionName,
                         CanIssueWarning = warningCheck.CanIssueWarning,
@@ -284,6 +288,8 @@ namespace MarikinaMarket.API.Application.Services
             {
                 VendorId = vendor.VendorId,
                 Username = vendor.Username,
+                Type = vendor.Type,
+                BusinessId = vendor.BusinessId,
                 StallNumber = vendor.StallNumber,
                 TradeName = vendor.TradeName,
                 LastName = vendor.LastName,

@@ -64,6 +64,7 @@ builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 builder.Services.AddScoped<IOrdinanceRepository, OrdinanceRepository>();
 builder.Services.AddScoped<IMarketSectionRepository, MarketSectionRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<IOtpRepository, OtpRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 builder.Services.AddScoped<IUserService, UserService>();
@@ -78,6 +79,8 @@ builder.Services.AddSingleton<IPushNotificationService, PushNotificationService>
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEnforcerService, EnforcerService>();
 builder.Services.AddScoped<IStorageService, StorageService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IOtpService, OtpService>();
 
 builder.Services.AddAuthentication(options =>
 {

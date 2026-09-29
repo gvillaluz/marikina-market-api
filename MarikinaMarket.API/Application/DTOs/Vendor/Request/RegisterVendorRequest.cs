@@ -43,6 +43,10 @@ namespace MarikinaMarket.API.Application.DTOs.User.Request
         [StringLength(100)]
         public required string City { get; set; }
 
+        [Required(ErrorMessage = "Business ID is required.")]
+        [StringLength(20)]
+        public required string BusinessId { get; set; }
+
         [Required(ErrorMessage = "Business name is required.")]
         [StringLength(100, MinimumLength = 2, ErrorMessage = "Business name must be between 2 and 50 characters.")]
         public required string BusinessName { get; set; }

@@ -10,6 +10,8 @@ namespace MarikinaMarket.API.Domain.Entities
         public required string GovernmentIdNumber { get; set; }
         public required string GovernmentIdPhotoUrl { get; set; }
         public required string BusinessDocumentPhotoUrl { get; set; }
+        public VendorType Type { get; set; }
+        public required string BusinessId { get; set; }
         public required string BusinessName { get; set; }
         public required string NatureOfBusiness { get; set; }
         public required string FirstName { get; set; }
@@ -24,7 +26,7 @@ namespace MarikinaMarket.API.Domain.Entities
         public required string PhoneNumber { get; set; }
         public required string Email { get; set; }
         public required string Password { get; set; }
-        public required string StallNumber { get; set; }
+        public string? StallNumber { get; set; }
 
         public required int MarketSectionId { get; set; }
         public MarketSection? MarketSection { get; set; }

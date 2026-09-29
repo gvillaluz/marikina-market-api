@@ -2,7 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace MarikinaMarket.API.Application.DTOs.User.Request
+namespace MarikinaMarket.API.Application.DTOs.Auth.Request
 {
     public class RegisterRequest
     {

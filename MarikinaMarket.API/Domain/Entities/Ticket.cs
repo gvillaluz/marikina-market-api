@@ -23,7 +23,7 @@ namespace MarikinaMarket.API.Domain.Entities
         public Severity? HighestSeverity { get; set; }
         public PenaltyType? PenaltyType { get; set; }
         public int? CommunityServiceHours { get; set; }
-        public List<string>? ReceiptUrls { get; set; }
+        public List<string>? ProofUrls { get; set; }
         public List<ViolationCategory> Categories { get; set; } = [];
         public DateTime IssuedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
@@ -31,5 +31,6 @@ namespace MarikinaMarket.API.Domain.Entities
 
         public ICollection<TicketViolation> TicketViolations { get; set; } = [];
         public ICollection<TicketEvidence>? TicketEvidences { get; set; } = [];
+        public ICollection<CommunityServiceLog> CommunityServiceLogs { get; set; } = [];
     }
 }

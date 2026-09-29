@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Net;
 using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Request;
@@ -48,6 +49,125 @@ namespace MarikinaMarket.API.Application.Services
                 WarningRecorded = ticketCount.WarningRecorded,
                 TotalRecorded = ticketCount.TotalRecorded
             };
+        }
+
+        public async Task<TicketSettlementResponse> SubmitTicketSettlementAsync(
+            int ticketId,
+            int enforcerId,
+            SubmitTicketSettlementRequest request)
+        {
+            var ticket = await _ticketRepository.GetTicketByIdAsync(ticketId);
+
+            if (ticket is null)
+                throw new RecordNotFoundException("Ticket not found.");
+
+            if (ticket.EnforcerId != enforcerId)
+                throw new UnauthorizedAccessException("You can only submit settlement proof for tickets assigned to you.");
+
+            if (ticket.Type != ViolationType.Ticket)
+                throw new InvalidRequestException("Settlement proof can only be submitted for violation tickets.");
+
+            if (ticket.PenaltyType is not (PenaltyType.CashFine or PenaltyType.BloodDonation or PenaltyType.CommunityService))
+                throw new InvalidRequestException("The ticket does not have a supported penalty type.");
+
+            var proofFile = request.ProofFile;
+            ValidateSettlementProof(proofFile);
+
+            if (ticket.PenaltyType == PenaltyType.CommunityService)
+            {
+                if (!request.ServiceDate.HasValue || !request.HoursWorked.HasValue)
+                    throw new InvalidRequestException("Service date and hours worked are required for community service.");
+
+                if (request.ServiceDate.Value.Date > DateTime.UtcNow.Date)
+                    throw new InvalidRequestException("Service date cannot be in the future.");
+
+                if (request.HoursWorked.Value <= 0)
+                    throw new InvalidRequestException("Hours worked must be greater than zero.");
+
+                if (!ticket.CommunityServiceHours.HasValue || ticket.CommunityServiceHours.Value <= 0)
+                    throw new InvalidRequestException("The ticket does not have a valid community service hour requirement.");
+
+                var completedHours = ticket.CommunityServiceLogs.Sum(log => log.HoursWorked);
+                if (completedHours + request.HoursWorked.Value > ticket.CommunityServiceHours.Value)
+                {
+                    var remainingHours = ticket.CommunityServiceHours.Value - completedHours;
+                    throw new InvalidRequestException($"Hours worked cannot exceed the remaining {remainingHours:0.##} community service hours.");
+                }
+            }
+
+            var proofKey = GenerateFileKey(proofFile!);
+            await _storageService.UploadEvidenceAsync(proofFile!, proofKey);
+
+            if (ticket.PenaltyType == PenaltyType.CommunityService)
+            {
+                ticket.CommunityServiceLogs.Add(new CommunityServiceLog
+                {
+                    TicketId = ticket.Id,
+                    ServiceDate = DateTime.SpecifyKind(request.ServiceDate!.Value.Date, DateTimeKind.Utc),
+                    HoursWorked = request.HoursWorked!.Value,
+                    ProofUrl = proofKey,
+                    RecordedById = enforcerId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                ticket.ProofUrls ??= [];
+                ticket.ProofUrls.Add(proofKey);
+            }
+
+            ticket.UpdatedAt = DateTime.UtcNow;
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConcurrencyConflictException("The ticket has been updated by another user. Please refresh and try again.");
+            }
+
+            var response = new TicketSettlementResponse
+            {
+                TicketId = ticket.Id,
+                PenaltyType = ticket.PenaltyType.Value
+            };
+
+            if (ticket.PenaltyType == PenaltyType.CommunityService)
+            {
+                var logs = ticket.CommunityServiceLogs
+                    .OrderBy(log => log.ServiceDate)
+                    .ThenBy(log => log.CreatedAt)
+                    .ToList();
+                var proofUrls = await _storageService.GetPresignedUrlsAsync(
+                    B2BucketType.Evidence,
+                    logs.Select(log => log.ProofUrl));
+                var requiredHours = ticket.CommunityServiceHours!.Value;
+                var completedHours = logs.Sum(log => log.HoursWorked);
+
+                response.CommunityServiceHoursRequired = requiredHours;
+                response.CommunityServiceHoursCompleted = completedHours;
+                response.CommunityServiceHoursRemaining = requiredHours - completedHours;
+                response.CommunityServiceCompletionPercentage = Math.Min(
+                    100m,
+                    Math.Round(completedHours / requiredHours * 100m, 1));
+                response.CommunityServiceLogs = logs.Select(log => new CommunityServiceLogResponse
+                {
+                    ServiceDate = log.ServiceDate,
+                    HoursWorked = log.HoursWorked,
+                    ProofUrl = proofUrls[log.ProofUrl]
+                }).ToList();
+            }
+            else
+            {
+                var proofUrls = await _storageService.GetPresignedUrlsAsync(
+                    B2BucketType.Evidence,
+                    ticket.ProofUrls ?? []);
+                response.ProofUrls = (ticket.ProofUrls ?? [])
+                    .Select(key => proofUrls[key])
+                    .ToList();
+            }
+
+            return response;
         }
 
         public async Task<FineSummaryResponse> GetOffenseCountsAndPaymentBy(List<int> ordinanceIds, int vendorId)
@@ -175,7 +295,7 @@ namespace MarikinaMarket.API.Application.Services
                         HighestSeverity = null,
                         PenaltyType = null,
                         CommunityServiceHours = null,
-                        ReceiptUrls = [],
+                        ProofUrls = [],
                         Categories = [.. ordinanceFineSummary.Breakdown.Select(o => o.Category)],
                         IssuedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow,
@@ -223,6 +343,8 @@ namespace MarikinaMarket.API.Application.Services
                         FirstName = vendor.FirstName,
                         MarketSectionId = newWarningTicket.MarketSectionId,
                         MarketSectionName = vendor.MarketSectionName!,
+                        VendorType = vendor.Type,
+                        BusinessId = vendor.BusinessId,
                         StallNumber = vendor.StallNumber,
                         BusinessName = vendor.BusinessName!,
                         EnforcerId = newWarningTicket.EnforcerId,
@@ -279,7 +401,7 @@ namespace MarikinaMarket.API.Application.Services
                     HighestSeverity = ordinanceFineSummary.HighestSeverity,
                     PenaltyType = request.PenaltyType,
                     CommunityServiceHours = request.CommunityServiceHours,
-                    ReceiptUrls = [],
+                    ProofUrls = [],
                     Categories = [.. ordinanceFineSummary.Breakdown.Select(o => o.Category)],
                     IssuedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
@@ -300,17 +422,34 @@ namespace MarikinaMarket.API.Application.Services
 
                 if (!string.IsNullOrEmpty(vendor.Email))
                 {
+                    var firstName = WebUtility.HtmlEncode(vendor.FirstName);
+                    var lastName = WebUtility.HtmlEncode(vendor.LastName);
+                    var businessName = WebUtility.HtmlEncode(vendor.BusinessName);
+
                     string subject = $"Notice of Violation Ticket - Control No. {newTicket.ControlNumber}";
-                    string body = $"Dear {vendor.FirstName} {vendor.LastName},\n\n" +
-                        $"This is to inform you that a violation ticket has been issued for your stall, {vendor.BusinessName}.\n\n" +
-                        $"Control No.: {newTicket.ControlNumber}\n" +
-                        $"Total Penalty: PHP {newTicket.TotalPaymentAmount:N2}\n" +
-                        $"Due Date: {newTicket.IssuedAt.AddDays(15):MMMM dd, yyyy}\n\n" +
-                        $"Please settle the amount above on or before the due date to avoid further administrative action, including additional penalties or suspension of your stall permit.\n\n" +
-                        $"If you wish to contest this ticket, please visit the market administration office within 15 days of the issue date to file an appeal.\n\n" +
-                        $"Thank you for your prompt attention to this matter.\n\n" +
-                        $"Sincerely,\n" +
-                        $"Market Administration Office";
+                    string body = $@"
+                        <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
+                            <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
+                            <p style=""color: #666; margin-top: 0;"">Notice of Violation Ticket</p>
+
+                            <p>Dear {firstName} {lastName},</p>
+                            <p>This is to inform you that a violation ticket has been issued for your stall, {businessName}.</p>
+
+                            <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                                <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
+                                    <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{newTicket.ControlNumber}</td></tr>
+                                    <tr><td style=""padding: 4px 0; color: #666;"">Total Penalty</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">PHP {newTicket.TotalPaymentAmount:N2}</td></tr>
+                                    <tr><td style=""padding: 4px 0; color: #666;"">Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{newTicket.IssuedAt.AddDays(15):MMMM dd, yyyy}</td></tr>
+                                </table>
+                            </div>
+
+                            <p>Please settle the amount above on or before the due date to avoid further administrative action, including additional penalties or suspension of your stall permit.</p>
+                            <p>If you wish to contest this ticket, please visit the market administration office within 15 days of the issue date to file an appeal.</p>
+                            <p>Thank you for your prompt attention to this matter.</p>
+
+                            <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
+                            <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
+                        </div>";
 
                     await _notificationService.SendEmailAsync(vendor.Email, subject, body);
                 }
@@ -324,6 +463,8 @@ namespace MarikinaMarket.API.Application.Services
                     FirstName = vendor.FirstName,
                     MarketSectionId = newTicket.MarketSectionId,
                     MarketSectionName = vendor.MarketSectionName!,
+                    VendorType = vendor.Type,
+                    BusinessId = vendor.BusinessId,
                     StallNumber = vendor.StallNumber,
                     BusinessName = vendor.BusinessName!,
                     EnforcerId = newTicket.EnforcerId,
@@ -344,11 +485,11 @@ namespace MarikinaMarket.API.Application.Services
             }
         }
 
-        public async Task<PageResponse<InspectionSummaryResponse>> GetInspectionsByEnforcerIdAsync(int enforcerId, int offset, ViolationType type)
+        public async Task<PageResponse<InspectionSummaryResponse>> GetInspectionsByEnforcerIdAsync(int enforcerId, int offset, ViolationType type, string search)
         {
             offset = Math.Max(offset, 0);
 
-            var tickets = await _ticketRepository.GetInspectionsAsync(enforcerId, offset, PAGE_SIZE, type);
+            var tickets = await _ticketRepository.GetInspectionsAsync(enforcerId, offset, PAGE_SIZE, type, search);
 
             if (tickets is null || tickets.Count == 0)
                 return new PageResponse<InspectionSummaryResponse> { Items = [], HasMore = false };
@@ -367,6 +508,8 @@ namespace MarikinaMarket.API.Application.Services
                 BusinessName = t.BusinessName,
                 MarketSectionId = t.MarketSectionId,
                 MarketSectionName = t.MarketSectionName,
+                BusinessId = t.BusinessId,
+                VendorType = t.VendorType,
                 StallNumber = t.StallNumber,
                 EnforcerId = t.EnforcerId,
                 Type = t.Type,
@@ -375,7 +518,7 @@ namespace MarikinaMarket.API.Application.Services
                 OrdinanceNames = t.Ordinances,
                 IssuedAt = t.IssuedAt,
                 OverdueDate = t.Type == ViolationType.Ticket
-                    ? t.IssuedAt.AddDays(15)
+                    ? t.IssuedAt.AddDays(5)
                     : null,
                 UpdatedAt = t.UpdatedAt
             }).ToList();
@@ -390,12 +533,13 @@ namespace MarikinaMarket.API.Application.Services
         public async Task<PageResponse<TicketSummaryResponse>> GetTicketsByEnforcerIdAsync(
             int enforcerId,
             int offset,
-            TicketStatus status
+            TicketStatus status,
+            string search
             )
         {
             offset = Math.Max(offset, 0);
 
-            var tickets = await _ticketRepository.GetTicketsAsync(enforcerId, offset, PAGE_SIZE, status);
+            var tickets = await _ticketRepository.GetTicketsAsync(enforcerId, offset, PAGE_SIZE, status, search);
 
             if (tickets is null || tickets.Count == 0)
                 return new PageResponse<TicketSummaryResponse> { Items = [], HasMore = false };
@@ -411,12 +555,14 @@ namespace MarikinaMarket.API.Application.Services
                 VendorId = t.VendorId,
                 BusinessName = t.BusinessName,
                 MarketSectionName = t.MarketSectionName,
+                VendorType = t.VendorType,
+                BusinessId = t.BusinessId,
                 StallNumber = t.StallNumber,
                 EnforcerId = t.EnforcerId,
                 Status = t.Status ?? TicketStatus.Pending,
                 IssuedAt = t.IssuedAt,
                 UpdatedAt = t.UpdatedAt,
-                OverdueDate = t.IssuedAt.AddDays(15)
+                OverdueDate = t.IssuedAt.AddDays(5)
             }).ToList();
 
             return new PageResponse<TicketSummaryResponse>
@@ -482,17 +628,33 @@ namespace MarikinaMarket.API.Application.Services
 
             if (!string.IsNullOrEmpty(ticket?.Vendor?.User?.Email))
             {
+                var firstName = WebUtility.HtmlEncode(ticket.Vendor.User.FirstName);
+                var lastName = WebUtility.HtmlEncode(ticket.Vendor.User.LastName);
+
                 string subject = $"Ticket Status Update - Control No. {ticket.ControlNumber}";
-                string body = $"Dear {ticket.Vendor.User.FirstName} {ticket.Vendor.User.LastName},\n\n" +
-                    $"This is to inform you that the status of your ticket has been updated.\n\n" +
-                    $"Control No.: {ticket.ControlNumber}\n" +
-                    $"Previous Status: {previousStatus}\n" +
-                    $"Current Status: {ticket.Status}\n" +
-                    $"Updated At: {ticket.UpdatedAt:MMMM dd, yyyy - hh:mm tt} UTC\n\n" +
-                    $"Please review your ticket details for further information. If you have any questions or concerns regarding this update, please visit the market administration office.\n\n" +
-                    $"Thank you for your attention to this matter.\n\n" +
-                    $"Sincerely,\n" +
-                    $"Market Administration Office";
+                string body = $@"
+            <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
+                <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
+                <p style=""color: #666; margin-top: 0;"">Ticket Status Update</p>
+
+                <p>Dear {firstName} {lastName},</p>
+                <p>This is to inform you that the status of your ticket has been updated.</p>
+
+                <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                    <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
+                        <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.ControlNumber}</td></tr>
+                        <tr><td style=""padding: 4px 0; color: #666;"">Previous Status</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{previousStatus}</td></tr>
+                        <tr><td style=""padding: 4px 0; color: #666;"">Current Status</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.Status}</td></tr>
+                        <tr><td style=""padding: 4px 0; color: #666;"">Updated At</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.UpdatedAt:MMMM dd, yyyy - hh:mm tt} UTC</td></tr>
+                    </table>
+                </div>
+
+                <p>Please review your ticket details for further information. If you have any questions or concerns regarding this update, please visit the market administration office.</p>
+                <p>Thank you for your attention to this matter.</p>
+
+                <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
+                <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
+            </div>";
 
                 await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
             }
@@ -578,6 +740,7 @@ namespace MarikinaMarket.API.Application.Services
                 VendorId = t.VendorId,
                 VendorLastName = t.VendorLastName,
                 VendorFirstName = t.VendorFirstName,
+                BusinessId = t.BusinessId,
                 StallNumber = t.StallNumber,
                 MarketSectionId = t.MarketSectionId,
                 MarketSectionName = t.MarketSectionName,
@@ -675,18 +838,33 @@ namespace MarikinaMarket.API.Application.Services
 
                 if (!string.IsNullOrEmpty(ticket.Vendor?.User?.Email))
                 {
+                    var firstName = WebUtility.HtmlEncode(ticket.Vendor.User.FirstName);
+                    var lastName = WebUtility.HtmlEncode(ticket.Vendor.User.LastName);
+
                     string subject = $"Overdue Notice - Control No. {ticket.ControlNumber}";
-                    string body = $"Dear {ticket.Vendor.User.FirstName} {ticket.Vendor.User.LastName},\n\n" +
-                        $"This is to inform you that your ticket has now become overdue.\n\n" +
-                        $"Control No.: {ticket.ControlNumber}\n" +
-                        $"Total Penalty: PHP {ticket.TotalPaymentAmount:N2}\n" +
-                        $"Original Due Date: {ticket.IssuedAt.AddDays(15):MMMM dd, yyyy}\n\n" +
-                        $"Please settle your outstanding balance as soon as possible to avoid further administrative action, " +
-                        $"including additional penalties or suspension of your stall permit.\n\n" +
-                        $"If you wish to contest this ticket, please visit the market administration office to file an appeal.\n\n" +
-                        $"Thank you for your prompt attention to this matter.\n\n" +
-                        $"Sincerely,\n" +
-                        $"Market Administration Office";
+                    string body = $@"
+                <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
+                    <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
+                    <p style=""color: #666; margin-top: 0;"">Overdue Notice</p>
+
+                    <p>Dear {firstName} {lastName},</p>
+                    <p>This is to inform you that your ticket has now become overdue.</p>
+
+                    <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                        <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
+                            <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.ControlNumber}</td></tr>
+                            <tr><td style=""padding: 4px 0; color: #666;"">Total Penalty</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">PHP {ticket.TotalPaymentAmount:N2}</td></tr>
+                            <tr><td style=""padding: 4px 0; color: #666;"">Original Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.IssuedAt.AddDays(15):MMMM dd, yyyy}</td></tr>
+                        </table>
+                    </div>
+
+                    <p>Please settle your outstanding balance as soon as possible to avoid further administrative action, including additional penalties or suspension of your stall permit.</p>
+                    <p>If you wish to contest this ticket, please visit the market administration office to file an appeal.</p>
+                    <p>Thank you for your prompt attention to this matter.</p>
+
+                    <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
+                    <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
+                </div>";
 
                     await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
                 }
@@ -709,6 +887,24 @@ namespace MarikinaMarket.API.Application.Services
             string fileExtension = Path.GetExtension(file.FileName);
             string datePath = DateTime.UtcNow.ToString("yyyy/MM");
             return $"tickets/{datePath}/{Guid.NewGuid()}{fileExtension}";
+        }
+
+        private static void ValidateSettlementProof(IFormFile? file)
+        {
+            if (file is null || file.Length <= 0)
+                throw new InvalidRequestException("A settlement proof file is required.");
+
+            const long maxFileSize = 5 * 1024 * 1024;
+            if (file.Length > maxFileSize)
+                throw new InvalidRequestException("Settlement proof files must not exceed 5 MB.");
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var isJpeg = (extension is ".jpg" or ".jpeg")
+                && string.Equals(file.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase);
+            var isPng = extension == ".png"
+                && string.Equals(file.ContentType, "image/png", StringComparison.OrdinalIgnoreCase);
+            if (!isJpeg && !isPng)
+                throw new InvalidRequestException("Settlement proof must be a JPG or PNG image.");
         }
     }
 }

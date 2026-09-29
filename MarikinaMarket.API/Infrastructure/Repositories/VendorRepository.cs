@@ -27,7 +27,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     MarketSectionId = v.MarketSectionId,
                     MarketSectionName = v.MarketSection!.Name,
                     BusinessName = v.BusinessName,
-                    StallNumber = v.StallNumber
+                    BusinessId = v.BusinessId,
+                    StallNumber = v.StallNumber,
+                    Type = v.Type
                 })
                 .FirstOrDefaultAsync();
         }
@@ -102,14 +104,16 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             }
         }
 
-        public async Task<List<VendorLookupResult>> GetVendorByStallNumber(string stallNumber)
+        public async Task<List<VendorLookupResult>> GetVendorByBusinessId(string businessId)
         {
             return await _context.VendorProfiles
-                .Where(v => v.StallNumber == stallNumber && v.Status == VendorStatus.Active)
+                .Where(v => v.BusinessId.ToLower().Contains(businessId.ToLower()) && v.Status == VendorStatus.Active)
                 .Select(v => new VendorLookupResult
                 {
                     VendorId = v.Id,
                     Username = v.User!.UserName!,
+                    Type = v.Type,
+                    BusinessId = v.BusinessId,
                     StallNumber = v.StallNumber,
                     TradeName = v.BusinessName,
                     LastName = v.User.LastName,
@@ -130,6 +134,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 {
                     VendorId = v.Id,
                     Username = v.User!.UserName!,
+                    Type = v.Type,
+                    BusinessId = v.BusinessId,
                     StallNumber = v.StallNumber,
                     TradeName = v.BusinessName,
                     LastName = v.User.LastName,

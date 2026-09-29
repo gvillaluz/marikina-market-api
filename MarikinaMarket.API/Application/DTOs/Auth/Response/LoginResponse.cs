@@ -1,4 +1,4 @@
-﻿namespace MarikinaMarket.API.Application.DTOs.User.Response
+﻿namespace MarikinaMarket.API.Application.DTOs.Auth.Response
 {
     public class LoginResponse
     {

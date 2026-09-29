@@ -24,7 +24,8 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         Task<List<string>> GetDeviceTokensByIdAsync(int userId);
         Task<UserDeviceToken?> GetDeviceTokenByValueAsync(string deviceToken);
         Task AddDeviceTokenAsync(UserDeviceToken userDeviceToken);
-
+        Task<string> GenerateResetPassTokenAsync(User user);
+        Task<IdentityResult> ResetPasswordByUsernameAsync(User user, string resetToken, string newPassword);
         Task<int> GetEnforcersCountAsync(EnforcerSummaryFilter filters);
         Task SaveChangesAsync();
     }

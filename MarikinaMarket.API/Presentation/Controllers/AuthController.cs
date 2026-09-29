@@ -1,8 +1,6 @@
-﻿using MarikinaMarket.API.Application;
-using MarikinaMarket.API.Application.DTOs.User.Request;
-using MarikinaMarket.API.Application.DTOs.User.Response;
+﻿using MarikinaMarket.API.Application.DTOs.Auth.Request;
+using MarikinaMarket.API.Application.DTOs.Auth.Response;
 using MarikinaMarket.API.Application.Interfaces.Services;
-using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -14,9 +12,9 @@ namespace MarikinaMarket.API.Presentation.Controllers
     [Authorize]
     public class AuthController : ControllerBase
     {
-        private readonly IUserService _userService;
+        private readonly IAuthService _service;
 
-        public AuthController(IUserService userService) => _userService = userService;
+        public AuthController(IAuthService service) => _service = service;
 
         [AllowAnonymous]
         [HttpPost("login")]
@@ -25,7 +23,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
             if (request == null)
                 return BadRequest("Request data must not be null or empty.");
 
-            return Ok(await _userService.LoginAsync(request));
+            return Ok(await _service.LoginAsync(request));
         }
 
         [AllowAnonymous]
@@ -35,7 +33,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
             if (request == null)
                 return BadRequest("Request data must not be null or empty.");
 
-            return Ok(await _userService.LoginMobileAsync(request));
+            return Ok(await _service.LoginMobileAsync(request));
         }
 
         [AllowAnonymous]
@@ -45,7 +43,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
             if (request == null)
                 return BadRequest("Request data must not be null or empty.");
 
-            return Ok(await _userService.RegisterAsync(request));
+            return Ok(await _service.RegisterAsync(request));
         }
 
         [AllowAnonymous]
@@ -55,7 +53,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
             if (request == null)
                 return BadRequest("Request data must not be null or empty.");
 
-            return Ok(await _userService.RefreshTokensAsync(request));
+            return Ok(await _service.RefreshTokensAsync(request));
         }
 
         [HttpPost("mandatory-change-password")]
@@ -63,7 +61,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         {
             var userId = GetUserIdFromClaims();
 
-            var result = await _userService.MandatoryChangePasswordAsync(request, userId);
+            var result = await _service.MandatoryChangePasswordAsync(request, userId);
 
             if (!result.Succeeded)
             {
@@ -78,7 +76,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             var userId = GetUserIdFromClaims();
-            var result = await _userService.ChangePasswordAsync(request, userId);
+            var result = await _service.ChangePasswordAsync(request, userId);
 
             if (!result.Succeeded)
             {
@@ -88,6 +86,33 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
             return Ok();
         }
+
+        [AllowAnonymous]
+        [HttpPost("find-account")]
+        public async Task<ActionResult<FindAccountResponse>> FindAccount([FromBody] FindAccountRequest request)
+        {
+            if (string.IsNullOrEmpty(request.Username)) 
+                return BadRequest("Request body must not be empty.");
+
+            return Ok(await _service.FindAccountAsync(request));
+        }
+
+        [AllowAnonymous]
+        [HttpPost("send-otp")]
+        public async Task<ActionResult> SendOtpCode([FromBody] SendCodeRequest request)
+        {
+            return Ok(await _service.SendCodeAsync(request));
+        }
+
+        [AllowAnonymous]
+        [HttpPost("verify-otp")]
+        public async Task<ActionResult<VerifyCodeResponse>> VerifyCode([FromBody] VerifyCodeRequest request) 
+            => Ok(await _service.VerifyCodeAsync(request));
+
+        [AllowAnonymous]
+        [HttpPost("reset-password")]
+        public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+            => Ok(await _service.ResetPasswordAsync(request));
 
         private int GetUserIdFromClaims()
         {

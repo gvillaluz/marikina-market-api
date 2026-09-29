@@ -31,13 +31,18 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
                 .HasForeignKey(x => x.MarketSectionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            builder.HasMany(x => x.CommunityServiceLogs)
+                .WithOne(x => x.Ticket)
+                .HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.Property(x => x.Description)
                 .HasMaxLength(1000);
 
             builder.Property(x => x.TotalPaymentAmount)
                 .HasPrecision(18, 2);
 
-            builder.Property(x => x.ReceiptUrls)
+            builder.Property(x => x.ProofUrls)
                 .HasColumnType("text[]");
 
             builder.Property(x => x.HighestSeverity)

@@ -10,7 +10,9 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Response
         public required string ControlNumber { get; set; }
         public TicketStatus Status { get; set; }
         public required string BusinessName { get; set; }
-        public required string StallNumber { get; set; }
+        public required VendorType VendorType { get; set; }
+        public required string BusinessId { get; set; }
+        public string? StallNumber { get; set; }
         public required string MarketSectionName { get; set; }
         public DateTime IssuedAt { get; set; }
         public DateTime UpdatedAt { get; set; }

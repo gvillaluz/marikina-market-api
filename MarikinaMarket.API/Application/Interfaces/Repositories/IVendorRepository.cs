@@ -12,7 +12,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         public Task<VendorProfile> CreateVendorAsync(VendorProfile vendorProfile);
         public Task<VendorRegistrationRequest> AddVendorRegistryAsync(VendorRegistrationRequest vendor);
         public Task<VendorRegistrationRequest?> GetRegistrationById(int registrationId);
-        public Task<List<VendorLookupResult>> GetVendorByStallNumber(string stallNumber);
+        public Task<List<VendorLookupResult>> GetVendorByBusinessId(string businessId);
         public Task<VendorLookupResult?> GetVendorByQrCode(string codeValue);
         public void SetOriginalVersion(VendorRegistrationRequest request, uint version);
         public Task SaveChangesAsync();

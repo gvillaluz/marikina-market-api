@@ -1,4 +1,4 @@
-﻿namespace MarikinaMarket.API.Application.DTOs.User.Request
+﻿namespace MarikinaMarket.API.Application.DTOs.Auth.Request
 {
     public class TokenRefreshRequest
     {

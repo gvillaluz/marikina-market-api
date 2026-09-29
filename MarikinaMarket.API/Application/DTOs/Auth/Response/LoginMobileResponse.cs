@@ -1,6 +1,6 @@
-﻿namespace MarikinaMarket.API.Application.DTOs.User.Response
+﻿namespace MarikinaMarket.API.Application.DTOs.Auth.Response
 {
-    public class TokenRefreshResponse
+    public class LoginMobileResponse
     {
         public required string AccessToken { get; set; }
         public required string RefreshToken { get; set; }

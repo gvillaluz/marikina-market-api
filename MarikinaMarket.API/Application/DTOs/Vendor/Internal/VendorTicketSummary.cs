@@ -1,4 +1,6 @@
-﻿namespace MarikinaMarket.API.Application.DTOs.Vendor.Internal
+﻿using MarikinaMarket.API.Domain.Enums;
+
+namespace MarikinaMarket.API.Application.DTOs.Vendor.Internal
 {
     public class VendorTicketSummary
     {
@@ -9,6 +11,8 @@
         public int MarketSectionId { get; set; }
         public required string MarketSectionName { get; set; }
         public required string BusinessName { get; set; }
-        public required string StallNumber { get; set; }
+        public required string BusinessId { get; set; }
+        public string? StallNumber { get; set; }
+        public VendorType Type { get; set; }
     }
 }

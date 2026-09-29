@@ -12,8 +12,10 @@ namespace MarikinaMarket.API.Domain.Entities
         public int MarketSectionId { get; set; }
         public MarketSection? MarketSection { get; set; }
 
+        public VendorType Type { get; set; }
+        public required string BusinessId { get; set; }
         public required string BusinessName { get; set; }
-        public required string StallNumber { get; set; }
+        public string? StallNumber { get; set; }
         public int ComplianceScore { get; set; }
         public DateTime ScoreUpdatedAt { get; set; }
         public required string QrCodeValue { get; set; }

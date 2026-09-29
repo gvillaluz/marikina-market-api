@@ -10,15 +10,8 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
 {
     public interface IUserService
     {
-        Task<LoginResponse> LoginAsync(LoginRequest request);
-        Task<LoginMobileResponse> LoginMobileAsync(LoginRequest request);
-        Task<RegisterResponse> RegisterAsync(RegisterRequest request);
-        Task<User?> ValidateCredentialsAsync(string userName, string password);
-        Task<TokenRefreshResponse> RefreshTokensAsync(TokenRefreshRequest request);
         Task<UserProfileResponse> GetUserInfoAsync(int userId);
         Task<UserProfileResponse> UpdateUserInfo(EditUserRequest request, int userId);
-        Task<IdentityResult> MandatoryChangePasswordAsync(ChangePasswordRequest request, int userId);
-        Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId, bool clearMandatoryFlag = false);
         Task RegisterDeviceTokenAsync(int userId, string deviceToken);
         Task<UserProfileResponse> ChangeProfilePhoto(int userId, IFormFile file);
         Task<UserProfileResponse> RemoveProfilePhoto(int userId);

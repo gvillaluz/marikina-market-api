@@ -23,13 +23,15 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
             int enforcerId, 
             int offset, 
             int limit, 
-            ViolationType type
+            ViolationType type,
+            string search
         );
         Task<List<TicketSummary>> GetTicketsAsync(
             int enforcerId,
             int offset,
             int limit,
-            TicketStatus status
+            TicketStatus status,
+            string search
         );
         Task<List<AdminInspectionSummary>> GetAdminInspectionAsync(int offset, int limit, InspectionSummaryFilters filters);
         Task<List<AdminTicketSummary>> GetAdminTicketAsync(int offset, int limit, TicketSummaryFilters filters);

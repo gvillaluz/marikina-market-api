@@ -12,7 +12,9 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Internal
         public required string BusinessName { get; init; }
         public required int MarketSectionId { get; init; }
         public required string MarketSectionName { get; init; }
-        public required string StallNumber { get; init; }
+        public VendorType VendorType { get; init; }
+        public required string BusinessId { get; init; }
+        public string? StallNumber { get; init; }
         public required int EnforcerId { get; init; }
         public required ViolationType Type { get; init; }
         public TicketStatus? Status { get; init; }

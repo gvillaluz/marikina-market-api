@@ -11,11 +11,12 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
             builder.Property(v => v.StallNumber)
                 .HasMaxLength(20);
 
-            builder.HasIndex(v => new
-            {
-                v.MarketSectionId, 
-                v.StallNumber
-            }).IsUnique();
+            builder.Property(v => v.BusinessId)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            builder.HasIndex(v => v.BusinessId)
+                .IsUnique();
 
             builder.HasOne(u => u.User)
                 .WithOne(v => v.VendorProfile)
@@ -26,6 +27,9 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
                 .WithMany(v => v.VendorProfiles)
                 .HasForeignKey(v => v.MarketSectionId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Property(t => t.Type)
+                .HasConversion<string>();
 
             builder.Property(v => v.BusinessName)
                 .HasMaxLength(100);

@@ -11,7 +11,9 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Response
         public int VendorId { get; set; }
         public string? ControlNumber { get; set; }
         public ViolationType Type { get; set; }
-        public required string StallNumber { get; set; }
+        public VendorType VendorType { get; set; }
+        public required string BusinessId { get; set; }
+        public string? StallNumber { get; set; }
         public required string BusinessName { get; set; }
         public required string LastName { get; set; }
         public required string FirstName { get; set; }

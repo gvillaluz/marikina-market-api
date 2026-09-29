@@ -25,6 +25,56 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
             modelBuilder.HasSequence<int>("UserSequence", "shared");
 
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.CommunityServiceLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("timezone('utc', now())");
+
+                    b.Property<decimal>("HoursWorked")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("hours_worked");
+
+                    b.Property<string>("ProofUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("proof_url");
+
+                    b.Property<int>("RecordedById")
+                        .HasColumnType("integer")
+                        .HasColumnName("recorded_by_id");
+
+                    b.Property<DateTime>("ServiceDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("service_date");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("integer")
+                        .HasColumnName("ticket_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_community_service_logs");
+
+                    b.HasIndex("RecordedById")
+                        .HasDatabaseName("ix_community_service_logs_recorded_by_id");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_community_service_logs_ticket_id");
+
+                    b.ToTable("community_service_logs", (string)null);
+                });
+
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.MarketSection", b =>
                 {
                     b.Property<int>("Id")
@@ -462,6 +512,58 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.OtpVerification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("timezone('utc', now())");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("IsUsed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_used");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("integer")
+                        .HasColumnName("purpose");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_otp_verifications");
+
+                    b.HasIndex("UserId", "Purpose")
+                        .HasDatabaseName("ix_otp_verifications_user_id_purpose");
+
+                    b.ToTable("otp_verifications", (string)null);
+                });
+
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<int>("Id")
@@ -551,9 +653,9 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("penalty_type");
 
-                    b.PrimitiveCollection<List<string>>("ReceiptUrls")
+                    b.PrimitiveCollection<List<string>>("ProofUrls")
                         .HasColumnType("text[]")
-                        .HasColumnName("receipt_urls");
+                        .HasColumnName("proof_urls");
 
                     b.Property<string>("Status")
                         .HasColumnType("text")
@@ -878,6 +980,12 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BusinessId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("business_id");
+
                     b.Property<string>("BusinessName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -910,7 +1018,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasDefaultValueSql("timezone('utc', now())");
 
                     b.Property<string>("StallNumber")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("stall_number");
@@ -920,12 +1027,24 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("status");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
                     b.Property<int>("UserId")
                         .HasColumnType("integer")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id")
                         .HasName("pk_vendor_profiles");
+
+                    b.HasIndex("BusinessId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_vendor_profiles_business_id");
+
+                    b.HasIndex("MarketSectionId")
+                        .HasDatabaseName("ix_vendor_profiles_market_section_id");
 
                     b.HasIndex("QrCodeValue")
                         .IsUnique()
@@ -934,10 +1053,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.HasIndex("UserId")
                         .IsUnique()
                         .HasDatabaseName("ix_vendor_profiles_user_id");
-
-                    b.HasIndex("MarketSectionId", "StallNumber")
-                        .IsUnique()
-                        .HasDatabaseName("ix_vendor_profiles_market_section_id_stall_number");
 
                     b.ToTable("vendor_profiles", (string)null);
                 });
@@ -966,6 +1081,12 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("business_document_photo_url");
+
+                    b.Property<string>("BusinessId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("business_id");
 
                     b.Property<string>("BusinessName")
                         .IsRequired()
@@ -1071,7 +1192,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnName("reviewed_by");
 
                     b.Property<string>("StallNumber")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("stall_number");
@@ -1088,6 +1208,11 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("street");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -1096,6 +1221,10 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_vendor_registration_requests");
+
+                    b.HasIndex("BusinessId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_vendor_registration_requests_business_id");
 
                     b.HasIndex("Email")
                         .IsUnique()
@@ -1297,6 +1426,27 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.CommunityServiceLog", b =>
+                {
+                    b.HasOne("MarikinaMarket.API.Domain.Entities.User", "RecordedBy")
+                        .WithMany()
+                        .HasForeignKey("RecordedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_service_logs_users_recorded_by_id");
+
+                    b.HasOne("MarikinaMarket.API.Domain.Entities.Ticket", "Ticket")
+                        .WithMany("CommunityServiceLogs")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_service_logs_tickets_ticket_id");
+
+                    b.Navigation("RecordedBy");
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("MarikinaMarket.API.Domain.Entities.User", "Enforcer")
@@ -1328,6 +1478,18 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasConstraintName("fk_ordinance_penalty_tiers_ordinances_ordinance_id");
 
                     b.Navigation("Ordinance");
+                });
+
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.OtpVerification", b =>
+                {
+                    b.HasOne("MarikinaMarket.API.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_otp_verifications_users_user_id");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.RefreshToken", b =>
@@ -1531,6 +1693,8 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Ticket", b =>
                 {
+                    b.Navigation("CommunityServiceLogs");
+
                     b.Navigation("TicketEvidences");
 
                     b.Navigation("TicketViolations");

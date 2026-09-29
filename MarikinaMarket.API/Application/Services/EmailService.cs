@@ -26,7 +26,12 @@ namespace MarikinaMarket.API.Application.Services
             message.From.Add(new MailboxAddress("Marikina City Public Market", fromAddress));
             message.To.Add(new MailboxAddress("", toEmail));
             message.Subject = subject;
-            message.Body = new TextPart("plain") { Text = body };
+            var builder = new BodyBuilder
+            {
+                HtmlBody = body,
+                TextBody = "Please view this email in an HTML-capable email client to see your verification code."
+            };
+            message.Body = builder.ToMessageBody();
 
             using var client = new SmtpClient();
             await client.ConnectAsync(smtpHost!, int.Parse(smtpPort!), SecureSocketOptions.StartTls);

@@ -6,7 +6,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
     public interface IVendorService
     {
         public Task<RegisterVendorResponse> CreateVendorRegistryAsync(RegisterVendorRequest request);
-        public Task<List<GetVendorResponse>> GetVendorByStallNumberAsync(string stallNumber);
+        public Task<List<GetVendorResponse>> GetVendorByBusinessIdAsync(string stallNumber);
         public Task<GetVendorResponse> GetVendorByQrCode(string qrCode);
     }
 }

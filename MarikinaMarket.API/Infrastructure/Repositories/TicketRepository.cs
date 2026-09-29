@@ -34,6 +34,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         {
             return await _context.Tickets
                 .Include(t => t.Vendor!.User)
+                .Include(t => t.CommunityServiceLogs)
                 .FirstOrDefaultAsync(t => t.Id == ticketId);
         }
 
@@ -66,6 +67,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     EnforcerId = t.EnforcerId,
                     ControlNumber = t.ControlNumber ?? null,
                     Type = t.Type,
+                    VendorType = t.Vendor!.Type,
+                    BusinessId = t.Vendor!.BusinessId,
                     StallNumber = t.Vendor!.StallNumber,
                     BusinessName = t.Vendor.BusinessName,
                     LastName = t.Vendor.User!.LastName,
@@ -148,11 +151,25 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             int enforcerId, 
             int offset, 
             int limit,
-            ViolationType type
+            ViolationType type,
+            string search
             )
         {
-            return await _context.Tickets
-                .Where(t => t.EnforcerId == enforcerId && t.Type == type)
+            var query =  _context.Tickets
+                .Where(t => t.EnforcerId == enforcerId && t.Type == type).AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.Trim().ToLower();
+
+                query = query.Where(t =>
+                    t.ControlNumber!.ToLower().Contains(search) ||
+                    t.Vendor!.BusinessName.ToLower().Contains(search) ||
+                    t.Vendor.User!.FirstName.ToLower().Contains(search) ||
+                    t.Vendor.User.LastName.ToLower().Contains(search));
+            }
+
+            return await query
                 .OrderByDescending(t => t.IssuedAt)
                 .Skip(offset)
                 .Take(limit + 1)
@@ -163,9 +180,11 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     VendorId = t.VendorId,
                     LastName = t.Vendor!.User!.LastName,
                     FirstName = t.Vendor.User.FirstName,
+                    BusinessId = t.Vendor.BusinessId,
                     BusinessName = t.Vendor.BusinessName,
                     MarketSectionId = t.MarketSectionId,
                     MarketSectionName = t.MarketSection!.Name,
+                    VendorType = t.Vendor.Type,
                     StallNumber = t.Vendor.StallNumber,
                     EnforcerId = t.EnforcerId,
                     Type = t.Type,
@@ -181,13 +200,28 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             int enforcerId,
             int offset,
             int limit,
-            TicketStatus status
+            TicketStatus status,
+            string search
             )
         {
-            return await _context.Tickets
+            var query = _context.Tickets
                 .Where(t => t.EnforcerId == enforcerId 
                             && t.Status == status
                             && t.Type == ViolationType.Ticket)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.Trim().ToLower();
+
+                query = query.Where(t =>
+                    t.ControlNumber!.ToLower().Contains(search) ||
+                    t.Vendor!.BusinessName.ToLower().Contains(search) ||
+                    t.Vendor.User!.FirstName.ToLower().Contains(search) ||
+                    t.Vendor.User.LastName.ToLower().Contains(search));
+            }
+
+            return await query
                 .OrderByDescending(t => t.IssuedAt)
                 .Skip(offset)
                 .Take(limit + 1)
@@ -198,6 +232,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     VendorId = t.VendorId,
                     BusinessName = t.Vendor!.BusinessName,
                     MarketSectionName = t.MarketSection!.Name,
+                    VendorType = t.Vendor.Type,
+                    BusinessId = t.Vendor.BusinessId,
                     StallNumber = t.Vendor.StallNumber,
                     EnforcerId = t.EnforcerId,
                     Status = t.Status,
@@ -228,7 +264,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     t.Vendor!.User!.LastName.Contains(search) ||
                     t.Vendor.User.FirstName.Contains(search) ||
                     t.Vendor.BusinessName.Contains(search) ||
-                    t.Vendor.StallNumber.Contains(search));
+                    t.Vendor.BusinessId.Contains(search));
             }
 
             return await query
@@ -273,7 +309,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     t.Vendor!.User!.LastName.ToLower().Contains(search) ||
                     t.Vendor.User.FirstName.ToLower().Contains(search) ||
                     t.Vendor.BusinessName.ToLower().Contains(search) ||
-                    t.Vendor.StallNumber.ToLower().Contains(search));
+                    t.Vendor.BusinessId.ToLower().Contains(search));
             }
 
             return await query
@@ -290,6 +326,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     VendorId = t.VendorId,
                     VendorFirstName = t.Vendor!.User!.FirstName,
                     VendorLastName = t.Vendor.User.LastName,
+                    BusinessId = t.Vendor.BusinessId,
                     StallNumber = t.Vendor.StallNumber,
                     MarketSectionId = t.MarketSectionId,
                     MarketSectionName = t.MarketSection!.Name,
@@ -352,6 +389,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     EnforcerId = t.EnforcerId,
                     ControlNumber = t.ControlNumber ?? null,
                     Type = t.Type,
+                    BusinessId = t.Vendor!.BusinessId,
                     StallNumber = t.Vendor!.StallNumber,
                     BusinessName = t.Vendor.BusinessName,
                     LastName = t.Vendor.User!.LastName,
@@ -380,7 +418,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     Status = t.Status,
                     EnforcerFirstName = t.Enforcer!.FirstName,
                     EnforcerLastName = t.Enforcer.LastName,
-                    TicketReceipts = t.ReceiptUrls ?? new List<string>(),
+                    TicketReceipts = t.ProofUrls ?? new List<string>(),
                     Version = t.Version,
                 })
                 .FirstOrDefaultAsync();
@@ -525,6 +563,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     BusinessName = t.Vendor.BusinessName,
                     MarketSectionId = t.MarketSectionId,
                     MarketSectionName = t.MarketSection!.Name,
+                    BusinessId = t.Vendor.BusinessId,
                     StallNumber = t.Vendor.StallNumber,
                     EnforcerId = t.EnforcerId,
                     Type = t.Type,

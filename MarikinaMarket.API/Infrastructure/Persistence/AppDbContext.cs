@@ -18,11 +18,13 @@ namespace MarikinaMarket.API.Infrastructure.Persistence
         public DbSet<Ticket> Tickets { get; set; }
         public DbSet<TicketEvidence> TicketEvidences { get; set; }
         public DbSet<TicketViolation> TicketViolations { get; set; }
+        public DbSet<CommunityServiceLog> CommunityServiceLogs { get; set; }
         public DbSet<VendorProfile> VendorProfiles { get; set; }
         public DbSet<VendorRegistrationRequest> VendorRegistrationRequests { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<UserDeviceToken> UserDeviceTokens { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<OtpVerification> OtpVerifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

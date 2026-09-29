@@ -40,6 +40,22 @@ namespace MarikinaMarket.API.Presentation.Controllers
             return Ok(await _service.GetTicketDetailByIdAsync(id));
         }
 
+        [HttpPost("{id:int}/settlement")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<TicketSettlementResponse>> SubmitTicketSettlement(
+            [FromRoute] int id,
+            [FromForm] SubmitTicketSettlementRequest request)
+        {
+            if (id <= 0)
+                return BadRequest("Ticket identification must not be empty.");
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var enforcerId) || enforcerId <= 0)
+                return Unauthorized("Invalid token.");
+
+            return Ok(await _service.SubmitTicketSettlementAsync(id, enforcerId, request));
+        }
+
         [HttpPost("new-inspection")]
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<InspectionSummaryResponse>> SaveNewInspection([FromForm] CreateTicketRequest request)
@@ -59,7 +75,8 @@ namespace MarikinaMarket.API.Presentation.Controllers
         [HttpGet("inspections")]
         public async Task<ActionResult<PageResponse<InspectionSummaryResponse>>> GetAllInspectionsByEnforcerId(
             [FromQuery] int offset = 0,
-            [FromQuery] ViolationType type = ViolationType.Warning
+            [FromQuery] ViolationType type = ViolationType.Warning,
+            [FromQuery] string search = ""
             )
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -69,13 +86,14 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
             int enforcerId = int.Parse(userIdClaim);
 
-            return Ok(await _service.GetInspectionsByEnforcerIdAsync(enforcerId, offset, type));
+            return Ok(await _service.GetInspectionsByEnforcerIdAsync(enforcerId, offset, type, search));
         }
 
         [HttpGet]
         public async Task<ActionResult<PageResponse<TicketSummaryResponse>>> GetAllTicketsByEnforcerId(
             [FromQuery] int offset = 0,
-            [FromQuery] TicketStatus status = TicketStatus.Pending
+            [FromQuery] TicketStatus status = TicketStatus.Pending,
+            [FromQuery] string search = ""
             )
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -85,7 +103,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
             int enforcerId = int.Parse(userIdClaim);    
 
-            return Ok(await _service.GetTicketsByEnforcerIdAsync(enforcerId, offset, status));
+            return Ok(await _service.GetTicketsByEnforcerIdAsync(enforcerId, offset, status, search));
         }
 
         [HttpPost("fine-summary")]
