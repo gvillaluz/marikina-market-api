@@ -5,7 +5,9 @@ namespace MarikinaMarket.API.Application.DTOs.Vendor.Request
 {
     public class RegistrationApprovalRequest
     {
-        public required int AdminId { get; set; }
-        
+        [Range(1, int.MaxValue)]
+        public int VendorRegistrationId { get; set; }
+
+        public uint Version { get; set; }
     }
 }

@@ -56,6 +56,16 @@ namespace MarikinaMarket.API.Presentation.Controllers
             return Ok(await _service.RefreshTokensAsync(request));
         }
 
+        [AllowAnonymous]
+        [HttpPost("refresh-web")]
+        public async Task<ActionResult<LoginResponse>> RefreshAccessToken([FromBody] AccessTokenRefreshRequest request)
+        {
+            if (request == null)
+                return BadRequest("Request data must not be null or empty.");
+
+            return Ok(await _service.RefreshAccessTokenAsync(request));
+        }
+
         [HttpPost("mandatory-change-password")]
         public async Task<ActionResult> MandatoryChangePassword([FromBody] ChangePasswordRequest request)
         {
@@ -99,7 +109,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
         [AllowAnonymous]
         [HttpPost("send-otp")]
-        public async Task<ActionResult> SendOtpCode([FromBody] SendCodeRequest request)
+        public async Task<ActionResult<SendCodeResponse>> SendOtpCode([FromBody] SendCodeRequest request)
         {
             return Ok(await _service.SendCodeAsync(request));
         }
@@ -111,7 +121,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
         [AllowAnonymous]
         [HttpPost("reset-password")]
-        public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        public async Task<ActionResult<ResetPasswordResponse>> ResetPassword([FromBody] ResetPasswordRequest request)
             => Ok(await _service.ResetPasswordAsync(request));
 
         private int GetUserIdFromClaims()

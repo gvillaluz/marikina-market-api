@@ -70,6 +70,8 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
+builder.Services.AddScoped<IVendorComplianceScoreService, VendorComplianceScoreService>();
+builder.Services.AddScoped<IAdminAnalyticsService, AdminAnalyticsService>();
 builder.Services.AddScoped<IOrdinanceService, OrdinanceService>();
 builder.Services.AddScoped<IMarketSectionService, MarketSectionService>();
 builder.Services.AddScoped<ITokenService, TokenService>();

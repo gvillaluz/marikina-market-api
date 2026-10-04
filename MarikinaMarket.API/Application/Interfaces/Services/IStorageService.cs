@@ -1,5 +1,7 @@
 namespace MarikinaMarket.API.Application.Interfaces.Services
 {
+    using MarikinaMarket.API.Application.DTOs.Storage;
+
     public interface IStorageService
     {
         Task<string> UploadFileAsync(B2BucketType bucketType, IFormFile file, string key);
@@ -7,6 +9,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
         Task<List<string>> UploadEvidencesAsync(Dictionary<IFormFile, string> filesWithKeys);
         Task<string> GetPresignedUrlAsync(B2BucketType bucketType, string key, double expiryInDays = 7);
         Task<Dictionary<string, string>> GetPresignedUrlsAsync(B2BucketType bucketType, IEnumerable<string> keys, double expiryInDays = 7);
+        Task<FileMetadata?> GetFileMetadataAsync(B2BucketType bucketType, string key);
         Task DeleteFileAsync(B2BucketType bucketType, string key);
     }   
 }

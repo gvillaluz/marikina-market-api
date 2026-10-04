@@ -73,6 +73,12 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
             builder.Property(v => v.StallNumber)
                 .HasMaxLength(50);
 
+            builder.Property(v => v.ReviewReason)
+                .HasMaxLength(150);
+
+            builder.Property(v => v.ReviewRemarks)
+                .HasMaxLength(2000);
+
             builder.Property(v => v.Status)
                 .HasConversion<string>()
                 .HasMaxLength(20);

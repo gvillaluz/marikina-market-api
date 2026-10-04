@@ -1,4 +1,4 @@
-﻿namespace MarikinaMarket.API.Domain.Enums
+namespace MarikinaMarket.API.Domain.Enums
 {
     public enum TicketStatus
     {
@@ -7,6 +7,7 @@
         Waived,
         Contested,
         Overdue,
-        Cleared
+        Cleared,
+        InProgress
     }
 }

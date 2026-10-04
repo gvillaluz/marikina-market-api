@@ -657,6 +657,10 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("text[]")
                         .HasColumnName("proof_urls");
 
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
                     b.Property<string>("Status")
                         .HasColumnType("text")
                         .HasColumnName("status");
@@ -1176,6 +1180,16 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.Property<string>("RemarksOrReason")
                         .HasColumnType("text")
                         .HasColumnName("remarks_or_reason");
+
+                    b.Property<string>("ReviewReason")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("review_reason");
+
+                    b.Property<string>("ReviewRemarks")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("review_remarks");
 
                     b.Property<DateTime>("RequestedAt")
                         .ValueGeneratedOnAdd()

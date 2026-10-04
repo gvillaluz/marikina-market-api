@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.Interfaces.Services;
@@ -151,11 +152,27 @@ namespace MarikinaMarket.API.Presentation.Controllers
         [HttpPost("fine-summary")]
         public async Task<ActionResult<FineSummaryResponse>> GetTicketFineSummary([FromBody] FineSummaryRequest request)
         {
-            if (!request.OrdinanceIds.Any() || request.VendorId <= 0)
+            if (request.OrdinanceIds is null
+                || !request.OrdinanceIds.Any()
+                || request.OrdinanceIds.Any(id => id <= 0)
+                || request.VendorId <= 0)
                 return BadRequest("Ordinance and vendor must not be empty.");
 
             return Ok(await _service.GetOffenseCountsAndPaymentBy(request.OrdinanceIds, request.VendorId));
         }
 
+        [HttpPost("warning-check")]
+        public async Task<ActionResult<List<WarningOrdinance>>> GetWarningOrdinances([FromBody] FineSummaryRequest request)
+        {
+            if (request.OrdinanceIds is null
+                || !request.OrdinanceIds.Any()
+                || request.OrdinanceIds.Any(id => id <= 0)
+                || request.VendorId <= 0)
+                return BadRequest("Ordinance and vendor must not be empty.");
+
+            return Ok(await _service.GetWarningOrdinancesForVendorAsync(
+                request.OrdinanceIds,
+                request.VendorId));
+        }
     }
 }

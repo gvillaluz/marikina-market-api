@@ -3,6 +3,7 @@ using MarikinaMarket.API.Application.DTOs.Enforcers.Response;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.Interfaces;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
+using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Enums;
 
 namespace MarikinaMarket.API.Application.Services
@@ -11,13 +12,19 @@ namespace MarikinaMarket.API.Application.Services
     {
         private readonly IUserRepository _userRepository;
         private readonly ITicketRepository _ticketRepository;
+        private readonly IStorageService _storageService;
 
         private const int PAGE_SIZE = 10;
 
-        public EnforcerService(IUserRepository userRepository, ITicketRepository ticketRepository)
+        public EnforcerService(
+            IUserRepository userRepository, 
+            ITicketRepository ticketRepository,
+            IStorageService storageService
+            )
         {
             _userRepository = userRepository;
             _ticketRepository = ticketRepository;
+            _storageService = storageService;
         }
 
         public async Task<PageResponse<AdminEnforcerSummaryResponse>> GetEnforcerSummaryAsync(int offset, EnforcerSummaryFilter filters)
@@ -37,9 +44,24 @@ namespace MarikinaMarket.API.Application.Services
 
             var enforcerTickets = await _ticketRepository.GetEnforcerTicketCountAsync(enforcers.Select(e => e.Id).ToList());
 
+            var profileKeys = enforcers
+                .Select(e => e.ProfilePictureUrl)
+                .OfType<string>() 
+                .Where(url => !string.IsNullOrEmpty(url))
+                .Distinct()
+                .ToList()!;
+
+            var profiles = profileKeys.Count > 0
+                ? await _storageService.GetPresignedUrlsAsync(B2BucketType.General, profileKeys)
+                : new Dictionary<string, string>();
+
             var items = enforcers.Select(e =>
             {
                 var counts = enforcerTickets.FirstOrDefault(t => t.EnforcerId == e.Id);
+
+                string? profileUrl = null;
+                if (!string.IsNullOrEmpty(e.ProfilePictureUrl))
+                    profiles.TryGetValue(e.ProfilePictureUrl, out profileUrl);
 
                 return new AdminEnforcerSummaryResponse
                 {
@@ -48,7 +70,7 @@ namespace MarikinaMarket.API.Application.Services
                     FirstName = e.FirstName,
                     LastName = e.LastName,
                     Status = e.Status,
-                    ProfileUrl = "",
+                    ProfileUrl = profileUrl ?? "",
                     WarningViolationCount = counts?.WarningCount ?? 0,
                     TicketViolationCount = counts?.TicketCount ?? 0,
                 };
@@ -150,7 +172,7 @@ namespace MarikinaMarket.API.Application.Services
                 IssuedAt = i.IssuedAt,
                 VendorFirstName = i.FirstName,
                 VendorLastName = i.LastName,
-                StallNumber = i.StallNumber,
+                StallNumber = i.StallNumber ?? "",
                 MarketSectionId = i.MarketSectionId,
                 MarketSectionName = i.MarketSectionName,
                 Type = i.Type,

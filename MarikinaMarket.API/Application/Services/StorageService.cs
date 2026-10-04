@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
+using MarikinaMarket.API.Application.DTOs.Storage;
 using MarikinaMarket.API.Application.Interfaces.Services;
 
 namespace MarikinaMarket.API.Application.Services
@@ -24,12 +26,15 @@ namespace MarikinaMarket.API.Application.Services
             var (s3Client, bucketName) = GetClientAndBucket(bucketType);
 
             using var stream = file.OpenReadStream();
+            
             await s3Client.PutObjectAsync(new PutObjectRequest
             {
                 BucketName = bucketName,
                 Key = key,
                 InputStream = stream,
-                ContentType = file.ContentType
+                ContentType = file.ContentType,
+                UseChunkEncoding = false,
+                DisablePayloadSigning = true
             });
 
             return key;
@@ -50,7 +55,9 @@ namespace MarikinaMarket.API.Application.Services
                 InputStream = stream,
                 ContentType = file.ContentType,
                 ObjectLockMode = ObjectLockMode.Compliance,
-                ObjectLockRetainUntilDate = DateTime.UtcNow.AddDays(retentionDays)
+                ObjectLockRetainUntilDate = DateTime.UtcNow.AddDays(retentionDays),
+                UseChunkEncoding = false,
+                DisablePayloadSigning = true
             });
 
             Console.WriteLine(
@@ -74,6 +81,30 @@ namespace MarikinaMarket.API.Application.Services
             return Task.FromResult(presignedUrl);
         }
 
+        public async Task<FileMetadata?> GetFileMetadataAsync(B2BucketType bucketType, string key)
+        {
+            var (s3Client, bucketName) = GetClientAndBucket(bucketType);
+
+            try
+            {
+                var response = await s3Client.GetObjectMetadataAsync(new GetObjectMetadataRequest
+                {
+                    BucketName = bucketName,
+                    Key = key
+                });
+
+                return new FileMetadata
+                {
+                    ContentType = response.Headers.ContentType,
+                    Size = response.ContentLength
+                };
+            }
+            catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+        }
+
         private (IAmazonS3 Client, string BucketName) GetClientAndBucket(B2BucketType bucketType)
         {
             return _clientCache.GetOrAdd(bucketType, type =>
@@ -93,7 +124,9 @@ namespace MarikinaMarket.API.Application.Services
                     ServiceURL = $"https://{_endpoint}",
                     ForcePathStyle = true,
                     AuthenticationRegion = "us-east-005",
-                    MaxErrorRetry = 2
+                    MaxErrorRetry = 2,
+                    RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+                    ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
                 };
 
                 return (new AmazonS3Client(keyId, appKey, s3Config), bucketName);

@@ -6,6 +6,7 @@ using MarikinaMarket.API.Domain.Enums;
 using System.ComponentModel.DataAnnotations;
 using MarikinaMarket.API.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -207,6 +208,29 @@ namespace MarikinaMarket.API.Application.Services
                 AccessToken = newAccessToken,
                 RefreshToken = newRefreshToken.Token,
                 RefreshTokenExpiration = newRefreshToken.ExpiresAt
+            };
+        }
+
+        public async Task<LoginResponse> RefreshAccessTokenAsync(AccessTokenRefreshRequest request)
+        {
+            var principal = await _tokenService.ValidateAccessTokenAsync(request.AccessToken);
+            var userIdValue = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!int.TryParse(userIdValue, out var userId))
+                throw new SessionExpiredException("Invalid access token. Please log in again.");
+
+            var user = await _repository.GetUserAsync(userId);
+            if (user is null)
+                throw new SessionExpiredException("Invalid access token. Please log in again.");
+
+            var userRole = await _repository.GetRoleAsync(user);
+            if (userRole == Role.Enforcer)
+                throw new UnauthorizedAccessException("This account is not allowed to use the web application.");
+
+            return new LoginResponse
+            {
+                AccessToken = await _tokenService.GenerateAccessToken(user),
+                MustChangePassword = user.MustChangePassword
             };
         }
 

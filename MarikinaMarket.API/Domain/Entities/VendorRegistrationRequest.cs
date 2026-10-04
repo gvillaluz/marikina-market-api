@@ -38,6 +38,8 @@ namespace MarikinaMarket.API.Domain.Entities
         public int? ReviewedBy { get; set; }
         public User? ReviewedByUser { get; set; }
         public string? RemarksOrReason { get; set; }
+        public string? ReviewReason { get; set; }
+        public string? ReviewRemarks { get; set; }
         public uint Version { get; set; }
     }
 }

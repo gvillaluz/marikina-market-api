@@ -7,7 +7,8 @@ namespace MarikinaMarket.API.Application.DTOs.Vendor.Internal
     {
         public int VendorRegistrationId { get; set; }
         public required RequestStatus RequestStatus { get; set; }
-        public string? RemarksOrReason { get; set; }
+        public string? ReviewReason { get; set; }
+        public string? ReviewRemarks { get; set; }
         public required uint Version { get; set; }
         public int AdminId { get; set; }
     }

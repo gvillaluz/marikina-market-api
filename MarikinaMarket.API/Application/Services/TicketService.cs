@@ -4,6 +4,9 @@ using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
+using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
+using MarikinaMarket.API.Application.DTOs.Vendor.Request;
+using MarikinaMarket.API.Application.DTOs.Vendor.Response;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
@@ -19,6 +22,7 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly INotificationService _notificationService;
         private readonly IStorageService _storageService;
+        private readonly IVendorComplianceScoreService _complianceScoreService;
         private readonly int PAGE_SIZE = 10;
 
         public TicketService(
@@ -27,7 +31,8 @@ namespace MarikinaMarket.API.Application.Services
             IVendorRepository vendorRepository,
             IUnitOfWork unitOfWork,
             IStorageService storageService,
-            INotificationService notificationService
+            INotificationService notificationService,
+            IVendorComplianceScoreService complianceScoreService
             )
         {
             _ticketRepository = ticketRepository;
@@ -36,6 +41,7 @@ namespace MarikinaMarket.API.Application.Services
             _unitOfWork = unitOfWork;
             _storageService = storageService;
             _notificationService = notificationService;
+            _complianceScoreService = complianceScoreService;
         }
 
         public async Task<MobileDashboardSummaryResponse> GetMobileTicketCountAsync(int enforcerId)
@@ -124,6 +130,12 @@ namespace MarikinaMarket.API.Application.Services
                 CreatedAt = DateTime.UtcNow
             });
             ticket.UpdatedAt = DateTime.UtcNow;
+            ticket.Status = completedHours + hoursWorked >= requiredHours
+                ? TicketStatus.Cleared
+                : TicketStatus.InProgress;
+            ticket.ResolvedAt = ticket.Status == TicketStatus.Cleared
+                ? ticket.UpdatedAt
+                : null;
             await _unitOfWork.SaveChangesAsync();
 
             return await BuildCommunityServiceProgressAsync(ticket);
@@ -230,6 +242,13 @@ namespace MarikinaMarket.API.Application.Services
             return BuildFineSummary(ordinanceWithTiers, false, duplicateOrdinances);
         }
 
+        public async Task<List<WarningOrdinance>> GetWarningOrdinancesForVendorAsync(
+            List<int> ordinanceIds,
+            int vendorId)
+        {
+            return await _ticketRepository.GetWarningOrdinancesForVendor(vendorId, ordinanceIds);
+        }
+
         private static FineSummaryResponse BuildFineSummary(
             List<OrdinanceOffenseSummary> ordinances,
             bool persist,
@@ -251,11 +270,7 @@ namespace MarikinaMarket.API.Application.Services
             {
                 var isDuplicate = duplicateIds.Contains(ordinance.OrdinanceId);
 
-                int offenseNumber;
-                if (persist)
-                    offenseNumber = ordinance.OffenseCount + 1;
-                else
-                    offenseNumber = ordinance.OffenseCount;
+                int offenseNumber = ordinance.OffenseCount + 1;
 
                 if (persist && !isDuplicate)
                     ordinance.OffenseCount = offenseNumber;
@@ -329,11 +344,11 @@ namespace MarikinaMarket.API.Application.Services
 
                 if (request.Type == ViolationType.Warning)
                 {
-                    var hasActiveWarningTicket = await _ticketRepository.HasActiveWarningTicket(vendor.Id);
+                    var warnedOrdinances = await GetWarningOrdinancesForVendorAsync(request.Ordinances, vendor.Id);
 
-                    if (hasActiveWarningTicket)
+                    if (warnedOrdinances.Any())
                     {
-                        throw new DuplicateWarningException("This vendor already has an active warning. A second warning cannot be issued within 24 hours.");
+                        throw new DuplicateWarningException("A warning has already been issued for one or more selected ordinances. Only one warning per ordinance is allowed.");
                     }
 
                     var warningTicket = new Ticket
@@ -368,6 +383,8 @@ namespace MarikinaMarket.API.Application.Services
                     if (newWarningTicket is null)
                         throw new ResourceCreationFailedException("Failed to create the ticket. Please try again.");
 
+                    await _unitOfWork.SaveChangesAsync();
+                    newWarningTicket.ControlNumber = $"WRN-{newWarningTicket.Id:D4}";
                     await _unitOfWork.SaveChangesAsync();
                     await _unitOfWork.CommitAsync();
 
@@ -472,6 +489,7 @@ namespace MarikinaMarket.API.Application.Services
                 var newTicket = await _ticketRepository.AddTicketAsync(ticket);
 
                 await _unitOfWork.SaveChangesAsync();
+                await UpdateVendorComplianceScoreAsync(vendor.Id);
                 await _unitOfWork.CommitAsync();
 
                 if (!string.IsNullOrEmpty(vendor.Email))
@@ -584,6 +602,89 @@ namespace MarikinaMarket.API.Application.Services
             };
         }
 
+        public async Task<PageResponse<VendorInspectionHistoryResponse>> GetVendorInspectionHistoryAsync(
+            int vendorId,
+            int offset,
+            VendorInspectionHistoryFilters filters)
+        {
+            offset = Math.Max(offset, 0);
+            var vendor = await _vendorRepository.GetByIdAsync(vendorId);
+
+            if (vendor is null)
+                throw new RecordNotFoundException("Vendor not found.");
+
+            var total = await _ticketRepository.GetVendorInspectionHistoryCountAsync(vendorId, filters);
+            var inspections = await _ticketRepository.GetVendorInspectionHistoryAsync(
+                vendorId,
+                offset,
+                PAGE_SIZE,
+                filters);
+
+            var hasMore = inspections.Count > PAGE_SIZE;
+            if (hasMore)
+                inspections.RemoveAt(inspections.Count - 1);
+
+            return new PageResponse<VendorInspectionHistoryResponse>
+            {
+                Items = inspections.Select(inspection => new VendorInspectionHistoryResponse
+                {
+                    TicketId = inspection.TicketId,
+                    ControlNumber = inspection.ControlNumber ??
+                        (inspection.Type == ViolationType.Warning
+                            ? $"WRN-{inspection.TicketId:D4}"
+                            : null),
+                    Type = inspection.Type,
+                    IssuedAt = inspection.IssuedAt,
+                    OrdinanceNumbers = inspection.OrdinanceNumbers,
+                    EnforcerName = FormatEnforcerName(
+                        inspection.EnforcerFirstName,
+                        inspection.EnforcerLastName)
+                }).ToList(),
+                HasMore = hasMore,
+                Total = total
+            };
+        }
+
+        public async Task<PageResponse<AdminCommunityServiceLogResponse>> GetCommunityServiceLogsAsync(
+            int offset,
+            TicketStatus? status)
+        {
+            offset = Math.Max(offset, 0);
+            var total = await _ticketRepository.GetCommunityServiceLogCountAsync(status);
+            var logs = await _ticketRepository.GetCommunityServiceLogsAsync(offset, PAGE_SIZE, status);
+            var hasMore = logs.Count > PAGE_SIZE;
+
+            if (hasMore)
+                logs.RemoveAt(logs.Count - 1);
+
+            return new PageResponse<AdminCommunityServiceLogResponse>
+            {
+                Items = logs.Select(log => new AdminCommunityServiceLogResponse
+                {
+                    TicketId = log.TicketId,
+                    ControlNumber = log.ControlNumber,
+                    BusinessId = log.BusinessId,
+                    VendorName = log.VendorName,
+                    CompletedHours = log.CompletedHours,
+                    TotalHours = log.TotalHours,
+                    LastUpdated = log.LastUpdated,
+                    ProofDocumentCount = log.ProofDocumentCount,
+                    Status = log.Status
+                }).ToList(),
+                HasMore = hasMore,
+                Total = total
+            };
+        }
+
+        private static string FormatEnforcerName(string firstName, string lastName)
+        {
+            var firstInitial = string.IsNullOrWhiteSpace(firstName)
+                ? ""
+                : $"{firstName[0]}.";
+
+            return $"Insp. {lastName}, {firstInitial}";
+        }
+
         public async Task<PageResponse<TicketSummaryResponse>> GetTicketsByEnforcerIdAsync(
             int enforcerId,
             int offset,
@@ -664,6 +765,12 @@ namespace MarikinaMarket.API.Application.Services
             _ticketRepository.SetOriginalVersion(ticket, request.Version);
             ticket.Status = request.NewStatus;
             ticket.UpdatedAt = DateTime.UtcNow;
+            if (request.NewStatus is TicketStatus.Paid or TicketStatus.Cleared or TicketStatus.Waived)
+                ticket.ResolvedAt = previousStatus == request.NewStatus && ticket.ResolvedAt.HasValue
+                    ? ticket.ResolvedAt
+                    : ticket.UpdatedAt;
+            else
+                ticket.ResolvedAt = null;
 
             await _notificationService.SaveNotificationAsync(
                 ticket.Id,
@@ -672,6 +779,8 @@ namespace MarikinaMarket.API.Application.Services
                 ticket.Status ?? TicketStatus.Pending
             );
             await _ticketRepository.SaveChangesAsync();
+            if (ticket.Type == ViolationType.Ticket)
+                await UpdateVendorComplianceScoreAsync(ticket.VendorId);
 
             if (!string.IsNullOrEmpty(ticket?.Vendor?.User?.Email))
             {
@@ -918,9 +1027,32 @@ namespace MarikinaMarket.API.Application.Services
             }
 
             if (newlyOverdueTickets.Count > 0)
+            {
                 await _ticketRepository.SaveChangesAsync();
+                foreach (var vendorId in newlyOverdueTickets.Select(t => t.VendorId).Distinct())
+                    await UpdateVendorComplianceScoreAsync(vendorId);
+            }
 
             return newlyOverdueTickets.Count;
+        }
+
+        private async Task UpdateVendorComplianceScoreAsync(int vendorId)
+        {
+            var vendor = await _vendorRepository.GetVendorProfileForUpdateAsync(vendorId);
+            if (vendor is null)
+                throw new RecordNotFoundException("Vendor not found while updating compliance score.");
+
+            var calculatedAt = DateTime.UtcNow;
+            var tickets = await _vendorRepository.GetVendorComplianceTicketsAsync(
+                vendorId,
+                calculatedAt.AddDays(-365),
+                calculatedAt);
+            var complianceScore = _complianceScoreService.Calculate(tickets, calculatedAt);
+
+            vendor.ComplianceScore = complianceScore.ComplianceScore;
+            vendor.ScoreUpdatedAt = calculatedAt;
+
+            await _unitOfWork.SaveChangesAsync();
         }
 
         private static double? CalculatePercentChange(int previous, int current)

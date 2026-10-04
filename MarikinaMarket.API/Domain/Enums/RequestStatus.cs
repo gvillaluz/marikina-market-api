@@ -5,6 +5,7 @@
         Pending,
         Reviewed,
         Approved,
-        Declined
+        Declined,
+        NeedsInformation
     }
 }

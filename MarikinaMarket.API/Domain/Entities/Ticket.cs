@@ -26,6 +26,7 @@ namespace MarikinaMarket.API.Domain.Entities
         public List<string>? ProofUrls { get; set; }
         public List<ViolationCategory> Categories { get; set; } = [];
         public DateTime IssuedAt { get; set; }
+        public DateTime? ResolvedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public uint Version { get; set; }
 

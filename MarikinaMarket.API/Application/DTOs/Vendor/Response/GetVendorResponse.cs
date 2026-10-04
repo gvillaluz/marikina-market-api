@@ -16,7 +16,5 @@ namespace MarikinaMarket.API.Application.DTOs.Vendor.Response
         public required string Address { get; set; }
         public required int MarketSectionId { get; set; }
         public required string MarketSectionName { get; set; }
-        public required bool CanIssueWarning { get; set; }
-        public DateTime? ActiveWarningIssuedAt { get; set; }
     }
 }

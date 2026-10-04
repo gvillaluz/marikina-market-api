@@ -10,6 +10,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
         Task<LoginMobileResponse> LoginMobileAsync(LoginRequest request);
         Task<RegisterResponse> RegisterAsync(RegisterRequest request);
         Task<TokenRefreshResponse> RefreshTokensAsync(TokenRefreshRequest request);
+        Task<LoginResponse> RefreshAccessTokenAsync(AccessTokenRefreshRequest request);
         Task<SendCodeResponse> SendCodeAsync(SendCodeRequest request);
         Task<VerifyCodeResponse> VerifyCodeAsync(VerifyCodeRequest request);
         Task<ResetPasswordResponse> ResetPasswordAsync(ResetPasswordRequest request);
