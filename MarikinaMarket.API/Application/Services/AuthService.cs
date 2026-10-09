@@ -19,6 +19,8 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IOtpService _otpService;
         private const int RENEW_AFTER_DAYS = 7;
         private const int REQUIRE_LOGIN_AFTER_DAYS = 60;
+        private const int LOGIN_OTP_EXPIRY_MINUTES = 10;
+        private const int LOGIN_OTP_RESEND_SECONDS = 30;
 
         public AuthService(
             IUserRepository repository,
@@ -34,43 +36,43 @@ namespace MarikinaMarket.API.Application.Services
             _otpService = otpService;
         }
 
-        public async Task<LoginResponse> LoginAsync(LoginRequest request)
+        public async Task<SendCodeResponse> LoginAsync(LoginRequest request)
         {
-            var user = await ValidateCredentialsAsync(request.Username, request.Password);
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+            var user = await GetLoginUserAsync(request.Username, request.Password, mobile: false);
+            return await SendLoginOtpAsync(user);
+        }
 
-            if (user is null)
-                throw new InvalidCredentialsException("Invalid email or password");
+        public async Task<SendCodeResponse> LoginMobileAsync(LoginRequest request)
+        {
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+            var user = await GetLoginUserAsync(request.Username, request.Password, mobile: true);
+            return await SendLoginOtpAsync(user);
+        }
 
-            var userRole = await _repository.GetRoleAsync(user);
-
-            if (userRole == Role.Enforcer)
-                throw new UnauthorizedAccessException("This account is not allowed to use the web application.");
-
-            var generatedAccessToken = await _tokenService.GenerateAccessToken(user);
+        public async Task<LoginResponse> VerifyLoginAsync(LoginVerificationRequest request)
+        {
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+            var user = await GetLoginUserAsync(request.Username, request.Password, mobile: false);
+            await VerifyLoginOtpAsync(user.Id, request.Code);
 
             return new LoginResponse
             {
-                AccessToken = generatedAccessToken,
+                AccessToken = await _tokenService.GenerateAccessToken(user),
                 MustChangePassword = user.MustChangePassword
             };
         }
 
-        public async Task<LoginMobileResponse> LoginMobileAsync(LoginRequest request)
+        public async Task<LoginMobileResponse> VerifyLoginMobileAsync(LoginVerificationRequest request)
         {
-            var user = await ValidateCredentialsAsync(request.Username, request.Password);
-
-            if (user is null)
-                throw new InvalidCredentialsException("Invalid username or password");
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+            var user = await GetLoginUserAsync(request.Username, request.Password, mobile: true);
+            await VerifyLoginOtpAsync(user.Id, request.Code);
 
             var generatedAccessToken = await _tokenService.GenerateAccessToken(user);
             var refreshToken = await _repository.AddRefreshTokenAsync(
                 _tokenService.GenerateRefreshToken(user.Id)
             );
-
-            var userRole = await _repository.GetRoleAsync(user);
-
-            if (userRole != Role.Enforcer)
-                throw new UnauthorizedAccessException("This account is not allowed to use the mobile application.");
 
             await _repository.SaveChangesAsync();
 
@@ -82,8 +84,79 @@ namespace MarikinaMarket.API.Application.Services
             };
         }
 
+        private async Task<User> GetLoginUserAsync(string username, string password, bool mobile)
+        {
+            var user = await ValidateCredentialsAsync(username, password)
+                ?? throw new InvalidCredentialsException("Invalid username or password.");
+
+            if (user.Status != AccountStatus.Active)
+                throw new UnauthorizedAccessException("Account is inactive.");
+
+            var role = await _repository.GetRoleAsync(user);
+            if (!role.HasValue || !Enum.IsDefined(role.Value) ||
+                (mobile ? role != Role.MarketEnforcer : role == Role.MarketEnforcer))
+                throw new UnauthorizedAccessException("Account cannot use this application.");
+
+            if (string.IsNullOrWhiteSpace(user.Email) || !new EmailAddressAttribute().IsValid(user.Email))
+                throw new InvalidRequestException("No valid email. Contact an admin.");
+
+            return user;
+        }
+
+        private async Task<SendCodeResponse> SendLoginOtpAsync(User user)
+        {
+            var latest = await _otpService.GetLatestOtpAsync(user.Id, OtpPurpose.TwoFactorAuthentication);
+            var now = DateTime.UtcNow;
+            if (latest is not null && !latest.IsUsed && latest.ExpiresAt > now &&
+                (now - latest.CreatedAt).TotalSeconds < LOGIN_OTP_RESEND_SECONDS)
+                return CreateLoginOtpResponse(latest, user.Email!, "Code already sent.");
+
+            var code = await _otpService.GenerateOtpAsync(user.Id, OtpPurpose.TwoFactorAuthentication, LOGIN_OTP_EXPIRY_MINUTES);
+            var otp = await _otpService.GetLatestOtpAsync(user.Id, OtpPurpose.TwoFactorAuthentication)
+                ?? throw new InvalidRequestException("Couldn't create a code. Try again.");
+
+            await _emailService.SendEmailAsync(user.Email!, "Sign-in verification code",
+                $"<h2>Verify your sign-in</h2><p>Your code is <strong>{code}</strong>.</p>" +
+                $"<p>It expires in {LOGIN_OTP_EXPIRY_MINUTES} minutes. If you didn't request it, ignore this email.</p>");
+
+            return CreateLoginOtpResponse(otp, user.Email!, "Code sent.");
+        }
+
+        private SendCodeResponse CreateLoginOtpResponse(OtpVerification otp, string email, string message)
+        {
+            var now = DateTime.UtcNow;
+            return new SendCodeResponse
+            {
+                Message = message,
+                MaskedEmail = MaskEmail(email),
+                ResendCooldownSeconds = Math.Clamp(
+                    (int)Math.Ceiling(LOGIN_OTP_RESEND_SECONDS - (now - otp.CreatedAt).TotalSeconds), 0, LOGIN_OTP_RESEND_SECONDS),
+                CodeExpirySeconds = Math.Clamp(
+                    (int)Math.Ceiling((otp.ExpiresAt - now).TotalSeconds), 0, LOGIN_OTP_EXPIRY_MINUTES * 60)
+            };
+        }
+
+        private async Task VerifyLoginOtpAsync(int userId, string code)
+        {
+            var result = await _otpService.ValidateOtpAsync(userId, OtpPurpose.TwoFactorAuthentication, code);
+            if (result == OtpVerificationResult.Success)
+                return;
+
+            var message = result switch
+            {
+                OtpVerificationResult.InvalidCode => "Incorrect code. Try again.",
+                OtpVerificationResult.Expired => "Code expired. Request a new one.",
+                OtpVerificationResult.TooManyAttempts => "Too many attempts. Request a new code.",
+                _ => "Invalid or expired code."
+            };
+            throw new InvalidRequestException(message);
+        }
+
         public async Task<RegisterResponse> RegisterAsync(RegisterRequest request)
         {
+            if (!Enum.IsDefined(request.Role) || request.Role == Role.HeadAdmin)
+                throw new ValidationException("This role cannot be assigned through registration.");
+
             var existingUser = await _repository.FindByEmailAsync(request.EmailAddress);
 
             if (existingUser is not null)
@@ -91,7 +164,14 @@ namespace MarikinaMarket.API.Application.Services
 
             var userNameSequence = await _repository.GetNextUserNameAsync();
 
-            var userName = $"{request.Role.ToString()[..3].ToUpper()}{userNameSequence}-{DateTime.UtcNow.Year}";
+            var prefix = request.Role switch
+            {
+                Role.AdminOfficer => "ADM",
+                Role.MarketEnforcer => "ENF",
+                Role.MarketVendor => "VEN",
+                _ => throw new ValidationException("Invalid account role.")
+            };
+            var userName = $"{prefix}{userNameSequence}-{DateTime.UtcNow.Year}";
 
             var user = new User
             {
@@ -224,7 +304,7 @@ namespace MarikinaMarket.API.Application.Services
                 throw new SessionExpiredException("Invalid access token. Please log in again.");
 
             var userRole = await _repository.GetRoleAsync(user);
-            if (userRole == Role.Enforcer)
+            if (userRole == Role.MarketEnforcer)
                 throw new UnauthorizedAccessException("This account is not allowed to use the web application.");
 
             return new LoginResponse
@@ -272,8 +352,10 @@ namespace MarikinaMarket.API.Application.Services
 
         public async Task<SendCodeResponse> SendCodeAsync(SendCodeRequest request)
         {
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
             const int resendCooldownSeconds = 30;
-            const int codeExpirySeconds = 90;
+            const int codeExpiryMinutes = 10;
+            const int codeExpirySeconds = codeExpiryMinutes * 60;
 
             var user = await _repository.FindByUserNameAsync(request.Username);
 
@@ -285,7 +367,7 @@ namespace MarikinaMarket.API.Application.Services
                     CodeExpirySeconds = codeExpirySeconds
                 };
 
-            var latestOtp = await _otpService.GetActiveOtpAsync(user.Id, OtpPurpose.ResetPassword);
+            var latestOtp = await _otpService.GetLatestOtpAsync(user.Id, OtpPurpose.ResetPassword);
 
             if (latestOtp is not null)
             {
@@ -295,18 +377,18 @@ namespace MarikinaMarket.API.Application.Services
                     return new SendCodeResponse
                     {
                         Message = "OTP Sent.",
-                        ResendCooldownSeconds = resendCooldownSeconds - (int)secondsSinceSent,
-                        CodeExpirySeconds = codeExpirySeconds
+                        ResendCooldownSeconds = Math.Clamp((int)Math.Ceiling(resendCooldownSeconds - secondsSinceSent), 0, resendCooldownSeconds),
+                        CodeExpirySeconds = Math.Clamp((int)Math.Ceiling((latestOtp.ExpiresAt - DateTime.UtcNow).TotalSeconds), 0, codeExpirySeconds)
                     };
                 }
             }
 
-            var otp = await _otpService.GenerateOtpAsync(user.Id, OtpPurpose.ResetPassword);
+            var otp = await _otpService.GenerateOtpAsync(user.Id, OtpPurpose.ResetPassword, codeExpiryMinutes);
+            var sentOtp = await _otpService.GetLatestOtpAsync(user.Id, OtpPurpose.ResetPassword)
+                ?? throw new InvalidRequestException("Couldn't create a code. Try again.");
 
-            if (request.Channel.Equals("email"))
+            if (string.Equals(request.Channel, "email", StringComparison.OrdinalIgnoreCase))
             {
-                var expiryMinutes = codeExpirySeconds / 60.0;
-
                 var emailBody = $@"
                 <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
                     <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
@@ -319,7 +401,7 @@ namespace MarikinaMarket.API.Application.Services
                         <span style=""font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #0F3D7A;"">{otp}</span>
                     </div>
 
-                    <p>This code will expire in <strong>{expiryMinutes:0.#} minute(s)</strong>.</p>
+                    <p>This code will expire in <strong>{codeExpiryMinutes} minutes</strong>.</p>
                     <p>If you didn't request a password reset, you can safely ignore this email — your password will remain unchanged.</p>
 
                     <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
@@ -331,21 +413,17 @@ namespace MarikinaMarket.API.Application.Services
                     emailBody
                 );
             }
-            else
-            {
-                // TODO: ADD SMS SERVICE
-            }
-
             return new SendCodeResponse
             {
                 Message = "OTP Sent.",
-                ResendCooldownSeconds = resendCooldownSeconds,
-                CodeExpirySeconds = codeExpirySeconds
+                ResendCooldownSeconds = Math.Clamp((int)Math.Ceiling(resendCooldownSeconds - (DateTime.UtcNow - sentOtp.CreatedAt).TotalSeconds), 0, resendCooldownSeconds),
+                CodeExpirySeconds = Math.Clamp((int)Math.Ceiling((sentOtp.ExpiresAt - DateTime.UtcNow).TotalSeconds), 0, codeExpirySeconds)
             };
         }
 
         public async Task<VerifyCodeResponse> VerifyCodeAsync(VerifyCodeRequest request)
         {
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
             var user = await _repository.FindByUserNameAsync(request.Username);
 
             if (user is null)
@@ -365,13 +443,19 @@ namespace MarikinaMarket.API.Application.Services
                 {
                     Success = false,
                     ResetToken = null,
-                    Message = "Too many incorrect attempts. Please request a new code.",
+                    Message = "Too many attempts. Request a new code.",
                 },
                 OtpVerificationResult.Expired => new VerifyCodeResponse
                 {
                     Success = false,
                     ResetToken = null,
-                    Message = "This code has expired. Please request a new one.",
+                    Message = "Code expired. Request a new one.",
+                },
+                OtpVerificationResult.InvalidCode => new VerifyCodeResponse
+                {
+                    Success = false,
+                    ResetToken = null,
+                    Message = "Incorrect code. Try again.",
                 },
                 _ => new VerifyCodeResponse { Success = false, ResetToken = null, Message = "Invalid or expired code." },
             };
@@ -412,10 +496,8 @@ namespace MarikinaMarket.API.Application.Services
             var name = parts[0];
             var domain = parts[1];
 
-            var visibleCount = Math.Min(3, Math.Max(name.Length - 1, 1));
-            string maskedName = name.Length <= visibleCount
-                ? name
-                : name[..visibleCount] + new string('*', name.Length - visibleCount);
+            var visibleCount = Math.Min(3, Math.Max(name.Length - 1, 0));
+            var maskedName = name[..visibleCount] + new string('*', Math.Max(name.Length - visibleCount, 1));
 
             return $"{maskedName}@{domain}";
         }

@@ -50,6 +50,29 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .FirstOrDefaultAsync(t => t.Id == ticketId);
         }
 
+        public async Task<List<VendorComplianceTicket>> GetVendorComplianceTicketsAsync(
+            IReadOnlyCollection<int> vendorIds, DateTime windowStart, DateTime calculatedAt)
+        {
+            var ids = vendorIds.ToArray();
+            return await _context.Tickets
+                .AsNoTracking()
+                .Where(t => ids.Contains(t.VendorId) &&
+                    t.Type == ViolationType.Ticket &&
+                    t.IssuedAt >= windowStart && t.IssuedAt <= calculatedAt)
+                .Select(t => new VendorComplianceTicket
+                {
+                    VendorId = t.VendorId,
+                    IssuedAt = t.IssuedAt,
+                    HighestSeverity = t.HighestSeverity,
+                    PenaltyType = t.PenaltyType,
+                    TotalPaymentAmount = t.TotalPaymentAmount,
+                    Status = t.Status,
+                    ResolvedAt = t.ResolvedAt ??
+                        (t.Status == TicketStatus.Paid ? t.UpdatedAt : null)
+                })
+                .ToListAsync();
+        }
+
         public async Task<DashboardTicketCount> GetTicketCountAsync(int enforcerId)
         {
             var sevenDaysAgo = DateTime.UtcNow.Date.AddDays(-7);
@@ -92,7 +115,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                         TicketId = t.Id,
                         OrdinanceId = tv.OrdinanceId,
                         OrdinanceNo = tv.Ordinance!.OrdinanceNo,
-                        OrdinanceCode = tv.Ordinance.Code,
+                        OrdinanceCode = tv.Ordinance.MarketCode,
                         OffenseCount = tv.OffenseCount,
                         PenaltyAmount = tv.PenaltyAmount
                     }).ToList(),
@@ -133,7 +156,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 {
                     OrdinanceId = tv.OrdinanceId,
                     OrdinanceNo = tv.Ordinance!.OrdinanceNo,
-                    OrdinanceCode = tv.Ordinance.Code
+                    OrdinanceCode = tv.Ordinance.MarketCode
                 })
                 .Distinct()
                 .ToListAsync();
@@ -153,7 +176,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 {
                     OrdinanceId = tv.OrdinanceId,
                     OrdinanceNo = tv.Ordinance!.OrdinanceNo,
-                    OrdinanceCode = tv.Ordinance.Code
+                    OrdinanceCode = tv.Ordinance.MarketCode
                 })
                 .Distinct()
                 .ToListAsync();
@@ -361,7 +384,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<List<Ticket>> GetNewlyOverdueTicketsAsync()
         {
-            var cutoff = DateTime.UtcNow.AddDays(-15);
+            var cutoff = DateTime.UtcNow.AddDays(-5);
 
             return await _context.Tickets
                 .Where(t => t.Type == ViolationType.Ticket &&
@@ -420,7 +443,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                         TicketId = t.Id,
                         OrdinanceId = tv.OrdinanceId,
                         OrdinanceNo = tv.Ordinance!.OrdinanceNo,
-                        OrdinanceCode = tv.Ordinance.Code,
+                        OrdinanceCode = tv.Ordinance.MarketCode,
                         OffenseCount = tv.OffenseCount,
                         PenaltyAmount = tv.PenaltyAmount
                     }).ToList(),

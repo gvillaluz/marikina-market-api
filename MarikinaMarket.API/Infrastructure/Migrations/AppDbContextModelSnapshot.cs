@@ -25,6 +25,136 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
             modelBuilder.HasSequence<int>("UserSequence", "shared");
 
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Backup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("B2Key")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)")
+                        .HasColumnName("b2key");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("DateTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_time");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("error_message");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("IsFinalized")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_finalized");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<bool>("StorageCleanupPending")
+                        .HasColumnType("boolean")
+                        .HasColumnName("storage_cleanup_pending");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backups");
+
+                    b.HasIndex("B2Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_backups_b2key");
+
+                    b.HasIndex("DateTime")
+                        .HasDatabaseName("ix_backups_date_time");
+
+                    b.HasIndex("IsFinalized", "Status", "ExpiresAt")
+                        .HasDatabaseName("ix_backups_is_finalized_status_expires_at");
+
+                    b.ToTable("backups", (string)null);
+                });
+
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.BackupSchedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<string>("DayOfWeek")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("day_of_week");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("frequency");
+
+                    b.Property<DateTime?>("LastAttemptScheduledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempt_scheduled_at");
+
+                    b.Property<DateTime?>("NextRetryAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_retry_at");
+
+                    b.Property<int>("RetentionDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("retention_days");
+
+                    b.Property<TimeOnly>("Time")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("time");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backup_schedules");
+
+                    b.ToTable("backup_schedules", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_backup_schedule_frequency", "(frequency = 'Daily' AND day_of_week IS NULL) OR (frequency = 'Weekly' AND day_of_week IS NOT NULL AND day_of_week IN ('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'))");
+
+                            t.HasCheckConstraint("ck_backup_schedule_retention", "retention_days BETWEEN 1 AND 365");
+
+                            t.HasCheckConstraint("ck_backup_schedule_singleton", "id = 1");
+                        });
+                });
+
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.CommunityServiceLog", b =>
                 {
                     b.Property<int>("Id")
@@ -96,6 +226,12 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -117,6 +253,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 1,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for vendors selling fresh fish, shellfish, and other marine products. Subject to strict sanitation standards and daily cleaning requirements per Chapter VIII of the Market Code of 2014.",
+                            IsActive = true,
                             Name = "Fish and Seafood Section"
                         },
                         new
@@ -124,6 +261,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 2,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for vendors selling all kinds of meat and meat products that passed the inspection of the City Veterinary Office in accordance with National Meat Inspection Commission standards. Wooden furniture prohibited per Section 58 of Market Code 2014.",
+                            IsActive = true,
                             Name = "Meat Section"
                         },
                         new
@@ -131,6 +269,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 3,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for vendors selling textiles, modiste and tailor supplies, accessories, apparels, native products, toiletries, novelties, toys, footwear, kitchenwares, household articles, handbags, and office supplies per Section 21(c) of the Market Code of 2014.",
+                            IsActive = true,
                             Name = "Dry Goods Section"
                         },
                         new
@@ -138,6 +277,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 4,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for vendors selling all kinds of vegetables, fruits, coconuts, root crops such as camote, cassava, gabi, and other farm products per Section 21(f) of the Market Code of 2014.",
+                            IsActive = true,
                             Name = "Vegetable Section"
                         },
                         new
@@ -145,6 +285,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 5,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for vendors selling bakery products, dairy, cold cuts, processed meat, condiments, cigarettes, soap, charcoal, and canned, bottled, boxed or sachet food products per Section 21(e) of the Market Code of 2014.",
+                            IsActive = true,
                             Name = "Groceries Section"
                         },
                         new
@@ -152,6 +293,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 6,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for vendors selling all kinds of cooked and prepared food. Food Safety and Personal Hygiene Training required for all eatery owners and helpers per Section 14 of the Market Code of 2014. Highest sanitation standards enforced under Chapter VIII.",
+                            IsActive = true,
                             Name = "Eatery Section"
                         },
                         new
@@ -159,6 +301,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 7,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for special commercial establishments including restaurants, pawnshops, hardware stores, drug stores, beauty parlors, internet cafes, flower shops, gift shops, magazine stands, and bayad centers per Section 21(d) of the Market Code of 2014.",
+                            IsActive = true,
                             Name = "Special Stalls"
                         },
                         new
@@ -166,6 +309,7 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                             Id = 8,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Designated area for any other business not classified under the established market sections per Section 21(h) of the Market Code of 2014. Subject to all general market rules and sanitation standards.",
+                            IsActive = true,
                             Name = "Miscellaneous Section"
                         });
                 });
@@ -230,11 +374,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("category");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("code");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -247,17 +386,39 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("description");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("MarketCode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("market_code");
+
                     b.Property<string>("OrdinanceNo")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("ordinance_no");
 
+                    b.Property<string>("Series")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("series");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)")
                         .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("timezone('utc', now())");
 
                     b.HasKey("Id")
                         .HasName("pk_ordinances");
@@ -273,51 +434,66 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 1,
                             Category = "Obstruction",
-                            Code = "Market Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Sections 42, 47, and 53 of the Revised Marikina Market Code of 2014 (amending Ordinance No. 149, Series of 1999) prohibit peddling or hawking in passageways, placing items on corridors and walkways, and conducting any vending activities on streets and sidewalks within the Marikina Public Market Zone. Stall holders must strictly observe their designated stall boundaries at all times.",
+                            IsActive = true,
+                            MarketCode = "Market Code",
                             OrdinanceNo = "Ord. No. 11, Series of 2014",
-                            Title = "Revised Marikina Market Code of 2014 — Stall Boundary and Walkway Violations"
+                            Series = "2014",
+                            Title = "Revised Marikina Market Code of 2014 — Stall Boundary and Walkway Violations",
+                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = 2,
                             Category = "Noise",
-                            Code = "Peace & Order Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Section 32 of the Revised Marikina Peace, Order, Public Safety and Security Code of 2006 regulates noise and revelries within the City. Audio-amplified equipment such as stereos, karaokes, videoke, and similar musical devices shall not play beyond normally accepted sound modulation after 10:00 PM. Market vendors are additionally prohibited from using sidewalks and streets as extensions of their stalls under Section 5, subject to fine of P1,000 and confiscation of goods. Alternative penalties including blood donation (for fines not exceeding P1,000) and community service are authorized under Appendix B.",
+                            IsActive = true,
+                            MarketCode = "Peace & Order Code",
                             OrdinanceNo = "Ord. No. 145, Series of 2006",
-                            Title = "Revised Marikina Peace, Order, Public Safety and Security Code of 2006"
+                            Series = "2006",
+                            Title = "Revised Marikina Peace, Order, Public Safety and Security Code of 2006",
+                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = 3,
                             Category = "Licensing",
-                            Code = "Market I.D.",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Ordinance No. 104, Series of 2007 amends Section 12 of the Marikina Market Code requiring all vendors and helpers in public and private markets within the City of Marikina to secure and display a valid Market Identification Card at all times. The Market ID costs Seventy-Five Pesos (P75.00) and must be renewed annually. Operating without a valid Market ID or business permit constitutes a violation subject to penalties under Section 79 of the Market Code of 2014.",
+                            IsActive = true,
+                            MarketCode = "Market I.D.",
                             OrdinanceNo = "Ord. No. 104, Series of 2007",
-                            Title = "Ordinance Amending Section 12 of the Marikina Market Code — Market Identification Card Requirements"
+                            Series = "2007",
+                            Title = "Ordinance Amending Section 12 of the Marikina Market Code — Market Identification Card Requirements",
+                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = 4,
                             Category = "Sanitation",
-                            Code = "Market Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Chapter VIII (Sections 66–75) of the Revised Marikina Market Code of 2014 governs the maintenance of market premises and sanitation standards. Stallholders must keep stalls clean at all times, use impervious materials on counters and walls per Section 72, protect cooked and raw foods from contamination per Section 70, clean stalls at the end of each business day per Section 73, and properly dispose of garbage per Section 69. All food eatery owners must complete Food Safety and Personal Hygiene Training per Section 14. A fine of One Thousand Pesos (P1,000.00) is imposed per violation. Third violation results in cancellation of license.",
+                            IsActive = true,
+                            MarketCode = "Market Code",
                             OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VIII",
-                            Title = "Revised Marikina Market Code of 2014 — Sanitation and Cleanliness Standards"
+                            Series = "2014",
+                            Title = "Revised Marikina Market Code of 2014 — Sanitation and Cleanliness Standards",
+                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = 5,
                             Category = "WeightMeasures",
-                            Code = "Market Code",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Chapter VI, Section 30 of the Revised Marikina Market Code of 2014 (amending Ordinance No. 160, Series of 2001 and Ordinance No. 283, Series of 1997) prohibits the use of underweight scales, placement of concealed materials in weighing scales, and any manipulation that reflects a weight other than the true weight of goods. All weighing devices must be registered with the City Treasury and submitted for annual re-inspection. Confiscated scales must be redeemed within five (5) working days. A specific graduated penalty schedule applies independently from the general market code penalties.",
+                            IsActive = true,
+                            MarketCode = "Market Code",
                             OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VI",
-                            Title = "Revised Marikina Market Code of 2014 — Weights and Measures Compliance"
+                            Series = "2014",
+                            Title = "Revised Marikina Market Code of 2014 — Weights and Measures Compliance",
+                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });
 
@@ -1181,6 +1357,12 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("remarks_or_reason");
 
+                    b.Property<DateTime>("RequestedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at")
+                        .HasDefaultValueSql("timezone('utc', now())");
+
                     b.Property<string>("ReviewReason")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
@@ -1190,12 +1372,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("review_remarks");
-
-                    b.Property<DateTime>("RequestedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("requested_at")
-                        .HasDefaultValueSql("timezone('utc', now())");
 
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1291,22 +1467,29 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         {
                             Id = 1,
                             ConcurrencyStamp = "a72b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-                            Name = "Admin",
-                            NormalizedName = "ADMIN"
+                            Name = "AdminOfficer",
+                            NormalizedName = "ADMINOFFICER"
                         },
                         new
                         {
                             Id = 2,
                             ConcurrencyStamp = "b83c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
-                            Name = "Enforcer",
-                            NormalizedName = "ENFORCER"
+                            Name = "MarketEnforcer",
+                            NormalizedName = "MARKETENFORCER"
                         },
                         new
                         {
                             Id = 3,
                             ConcurrencyStamp = "c94d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
-                            Name = "Vendor",
-                            NormalizedName = "VENDOR"
+                            Name = "MarketVendor",
+                            NormalizedName = "MARKETVENDOR"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            ConcurrencyStamp = "d05e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f90",
+                            Name = "HeadAdmin",
+                            NormalizedName = "HEADADMIN"
                         });
                 });
 

@@ -13,7 +13,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 {
     [ApiController]
     [Route("api/admin/vendors")]
-    [Authorize(Roles = nameof(Role.Admin))]
+    [Authorize(Roles = $"{nameof(Role.HeadAdmin)},{nameof(Role.AdminOfficer)}")]
     public class AdminVendorController : ControllerBase
     {
         private readonly IVendorService _service;

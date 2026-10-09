@@ -1,4 +1,4 @@
-﻿using MarikinaMarket.API.Application.DTOs.User.Request;
+using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.DTOs.Vendor.Request;
 using MarikinaMarket.API.Application.DTOs.Vendor.Response;
@@ -29,7 +29,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpPost("approve-registry")]
-        [Authorize(Roles = nameof(Role.Admin))]
+        [Authorize(Roles = $"{nameof(Role.HeadAdmin)},{nameof(Role.AdminOfficer)}")]
         public async Task<ActionResult<RegistrationApprovalResponse>> ApproveRegistration(
             [FromBody] RegistrationApprovalRequest request)
         {
@@ -48,7 +48,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpPost("decline-registry")]
-        [Authorize(Roles = nameof(Role.Admin))]
+        [Authorize(Roles = $"{nameof(Role.HeadAdmin)},{nameof(Role.AdminOfficer)}")]
         public async Task<ActionResult<RegistrationDeclinedResponse>> DeclineRegistration(
             [FromBody] RegistrationDeclineRequest request)
         {
@@ -58,7 +58,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
             var action = new RegistrationAdminAction
             {
                 VendorRegistrationId = request.VendorRegistrationId,
-                RequestStatus = RequestStatus.Declined,
+                RequestStatus = RequestStatus.Rejected,
                 ReviewReason = request.ReviewReason,
                 ReviewRemarks = request.ReviewRemarks,
                 Version = request.Version,
@@ -69,7 +69,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpPost("request-more-information")]
-        [Authorize(Roles = nameof(Role.Admin))]
+        [Authorize(Roles = $"{nameof(Role.HeadAdmin)},{nameof(Role.AdminOfficer)}")]
         public async Task<ActionResult<RegistrationDeclinedResponse>> RequestMoreInformation(
             [FromBody] RegistrationInformationRequest request)
         {
@@ -90,7 +90,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpGet("stall/{businessId}")]
-        [Authorize(Roles = nameof(Role.Enforcer))]
+        [Authorize(Roles = nameof(Role.MarketEnforcer))]
         public async Task<ActionResult<List<GetVendorResponse>>> GetVendorByStallNumber([FromRoute] string businessId)
         {
             if (string.IsNullOrWhiteSpace(businessId))
@@ -100,7 +100,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpGet("code/{code}")]
-        [Authorize(Roles = nameof(Role.Enforcer))]
+        [Authorize(Roles = nameof(Role.MarketEnforcer))]
         public async Task<ActionResult<GetVendorResponse>> GetVendorByQrCode([FromRoute] string code)
         {
             if(string.IsNullOrWhiteSpace(code))

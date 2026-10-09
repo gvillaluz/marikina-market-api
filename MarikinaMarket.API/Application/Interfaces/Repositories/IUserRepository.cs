@@ -1,4 +1,6 @@
 ﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
+using MarikinaMarket.API.Application.DTOs.User.Request;
+using MarikinaMarket.API.Application.DTOs.User.Response;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
@@ -7,12 +9,16 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface IUserRepository
     {
+        Task<AccountCountsResponse> GetAccountCountsAsync();
+        Task<List<UserSummaryResponse>> GetUserSummariesAsync(int offset, int limit, UserSummaryFilter filters);
+        Task<int> GetUserSummariesCountAsync(UserSummaryFilter filters);
         Task<User?> FindByUserNameAsync(string userName);
         Task<User?> FindByEmailAsync(string email);
         Task<IdentityResult> CreateUserAsync(User user, string password);
         Task<IdentityResult> CreateUserWithPassAsync(User user);
         Task<SignInResult> CheckPasswordAsync(User user, string password);
         Task<IdentityResult> AddToRoleAsync(User user, string role);
+        Task<bool> RoleExistsAsync(Role role);
         Task<Role?> GetRoleAsync(User user);
         Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refresshToken);
         Task<RefreshToken?> GetRefreshTokenAsync(string refreshToken);

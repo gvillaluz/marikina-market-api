@@ -4,6 +4,9 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
 
     public interface IStorageService
     {
+        Task UploadStreamAsync(B2BucketType bucketType, Stream stream, string key, CancellationToken cancellationToken);
+        Task<(Stream Stream, IDisposable Owner)> DownloadStreamAsync(B2BucketType bucketType, string key, CancellationToken cancellationToken);
+        Task DeleteAllVersionsAsync(B2BucketType bucketType, string key, CancellationToken cancellationToken);
         Task<string> UploadFileAsync(B2BucketType bucketType, IFormFile file, string key);
         Task<string> UploadEvidenceAsync(IFormFile file, string key, int retentionDays = 365);
         Task<List<string>> UploadEvidencesAsync(Dictionary<IFormFile, string> filesWithKeys);

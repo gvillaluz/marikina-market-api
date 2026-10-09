@@ -2,6 +2,7 @@
 using MarikinaMarket.API.Application.DTOs.Auth.Response;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
+using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -18,7 +19,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
         [AllowAnonymous]
         [HttpPost("login")]
-        public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
+        public async Task<ActionResult<SendCodeResponse>> Login([FromBody] LoginRequest request)
         {
             if (request == null)
                 return BadRequest("Request data must not be null or empty.");
@@ -28,7 +29,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
         [AllowAnonymous]
         [HttpPost("login-mobile")]
-        public async Task<ActionResult<LoginMobileResponse>> LoginMobile([FromBody] LoginRequest request)
+        public async Task<ActionResult<SendCodeResponse>> LoginMobile([FromBody] LoginRequest request)
         {
             if (request == null)
                 return BadRequest("Request data must not be null or empty.");
@@ -37,6 +38,16 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [AllowAnonymous]
+        [HttpPost("verify-login")]
+        public async Task<ActionResult<LoginResponse>> VerifyLogin([FromBody] LoginVerificationRequest request)
+            => Ok(await _service.VerifyLoginAsync(request));
+
+        [AllowAnonymous]
+        [HttpPost("verify-login-mobile")]
+        public async Task<ActionResult<LoginMobileResponse>> VerifyLoginMobile([FromBody] LoginVerificationRequest request)
+            => Ok(await _service.VerifyLoginMobileAsync(request));
+
+        [Authorize(Roles = nameof(Role.HeadAdmin))]
         [HttpPost("register")]
         public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request)
         {

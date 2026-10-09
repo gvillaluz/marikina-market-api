@@ -49,7 +49,6 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         public async Task<VendorRegistrationRequest?> GetRegistrationById(int registrationId)
         {
             return await _context.VendorRegistrationRequests
-                .AsNoTracking()
                 .Include(v => v.MarketSection)
                 .Include(v => v.ReviewedByUser)
                 .FirstOrDefaultAsync(v => v.Id == registrationId);
@@ -77,7 +76,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     PendingReview = group.Count(request => request.Status == RequestStatus.Pending),
                     NeedsInformation = group.Count(request => request.Status == RequestStatus.NeedsInformation),
                     Approved = group.Count(request => request.Status == RequestStatus.Approved),
-                    Rejected = group.Count(request => request.Status == RequestStatus.Declined)
+                    Rejected = group.Count(request => request.Status == RequestStatus.Rejected)
                 })
                 .FirstOrDefaultAsync();
 
@@ -202,29 +201,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<List<VendorComplianceTicket>> GetVendorComplianceTicketsAsync(
-            int vendorId,
-            DateTime windowStart,
-            DateTime calculatedAt)
-        {
-            return await _context.Tickets
-                .AsNoTracking()
-                .Where(t => t.VendorId == vendorId &&
-                    t.Type == ViolationType.Ticket &&
-                    t.IssuedAt >= windowStart &&
-                    t.IssuedAt <= calculatedAt)
-                .Select(t => new VendorComplianceTicket
-                {
-                    IssuedAt = t.IssuedAt,
-                    HighestSeverity = t.HighestSeverity,
-                    PenaltyType = t.PenaltyType,
-                    TotalPaymentAmount = t.TotalPaymentAmount,
-                    Status = t.Status,
-                    ResolvedAt = t.ResolvedAt ??
-                        (t.Status == TicketStatus.Paid ? t.UpdatedAt : null)
-                })
-                .ToListAsync();
-        }
+        public async Task<List<VendorProfile>> GetVendorProfilesForComplianceUpdateAsync()
+            => await _context.VendorProfiles.OrderBy(v => v.Id).ToListAsync();
 
         public async Task<VendorProfile?> GetVendorProfileForUpdateAsync(int vendorId)
         {
@@ -381,7 +359,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             return requests;
         }
 
-        public async void SetOriginalVersion(VendorRegistrationRequest registration, uint version)
+        public void SetOriginalVersion(VendorRegistrationRequest registration, uint version)
         {
             _context.Entry(registration)
                 .Property(r => r.Version)

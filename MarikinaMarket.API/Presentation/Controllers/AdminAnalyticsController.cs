@@ -8,7 +8,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 {
     [ApiController]
     [Route("api/admin/analytics")]
-    [Authorize(Roles = nameof(Role.Admin))]
+    [Authorize(Roles = $"{nameof(Role.HeadAdmin)},{nameof(Role.AdminOfficer)}")]
     public class AdminAnalyticsController : ControllerBase
     {
         private readonly IAdminAnalyticsService _service;

@@ -18,7 +18,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
             => _service = notificationService;
 
         [HttpGet]
-        [Authorize(Roles = nameof(Role.Enforcer))]
+        [Authorize(Roles = nameof(Role.MarketEnforcer))]
         public async Task<ActionResult<List<GetNotificationsResponse>>> GetNotifications(
             [FromQuery] int offset = 0,
             [FromQuery] string filter = "All")
@@ -33,7 +33,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpPatch("{notificationId}/read")]
-        [Authorize(Roles = nameof(Role.Enforcer))]
+        [Authorize(Roles = nameof(Role.MarketEnforcer))]
         public async Task<ActionResult> MarkAsRead([FromRoute] int notificationId)
         {
             if (notificationId <= 0) 

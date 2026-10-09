@@ -40,6 +40,72 @@ namespace MarikinaMarket.API.Application.Services
             return key;
         }
 
+        public async Task UploadStreamAsync(B2BucketType bucketType, Stream stream, string key, CancellationToken cancellationToken)
+        {
+            var (client, bucket) = GetClientAndBucket(bucketType);
+            await client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = bucket,
+                Key = key,
+                InputStream = stream,
+                ContentType = "application/octet-stream",
+                AutoCloseStream = false,
+                UseChunkEncoding = false,
+                DisablePayloadSigning = true
+            }, cancellationToken);
+        }
+
+        public async Task<(Stream Stream, IDisposable Owner)> DownloadStreamAsync(
+            B2BucketType bucketType, string key, CancellationToken cancellationToken)
+        {
+            var (client, bucket) = GetClientAndBucket(bucketType);
+            try
+            {
+                var response = await client.GetObjectAsync(new GetObjectRequest
+                {
+                    BucketName = bucket,
+                    Key = key
+                }, cancellationToken);
+                return (response.ResponseStream, response);
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                throw new RecordNotFoundException("The backup file was not found.");
+            }
+        }
+
+        public async Task DeleteAllVersionsAsync(B2BucketType bucketType, string key, CancellationToken cancellationToken)
+        {
+            var (client, bucket) = GetClientAndBucket(bucketType);
+            string? keyMarker = null;
+            string? versionMarker = null;
+            bool hasMore;
+            do
+            {
+                var response = await client.ListVersionsAsync(new ListVersionsRequest
+                {
+                    BucketName = bucket,
+                    Prefix = key,
+                    KeyMarker = keyMarker,
+                    VersionIdMarker = versionMarker
+                }, cancellationToken);
+                // Prefix matching alone is insufficient: delete only this backup's exact key.
+                foreach (var version in response.Versions ?? [])
+                {
+                    if (version.Key != key) continue;
+                    await client.DeleteObjectAsync(new DeleteObjectRequest
+                    {
+                        BucketName = bucket,
+                        Key = key,
+                        VersionId = version.VersionId
+                    }, cancellationToken);
+                }
+                hasMore = response.IsTruncated == true;
+                keyMarker = response.NextKeyMarker;
+                versionMarker = response.NextVersionIdMarker;
+            } while (hasMore);
+        }
+
         public async Task<string> UploadEvidenceAsync(IFormFile file, string key, int retentionDays = 365)
         {
             var (s3Client, bucketName) = GetClientAndBucket(B2BucketType.Evidence);

@@ -3,6 +3,8 @@ using MarikinaMarket.API.Application.DTOs.User.Response;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
+using MarikinaMarket.API.Application.DTOs.Tickets.Response;
+using MarikinaMarket.API.Domain.Enums;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 
@@ -12,6 +14,7 @@ namespace MarikinaMarket.API.Application.Services
     {
         private readonly IUserRepository _userRepository;
         private readonly IStorageService _storageService;
+        private const int PAGE_SIZE = 10;
 
         public UserService(
             IUserRepository userRepository, 
@@ -19,6 +22,55 @@ namespace MarikinaMarket.API.Application.Services
         {
             _userRepository = userRepository;
             _storageService = storageService;
+        }
+
+        public Task<AccountCountsResponse> GetAccountCountsAsync()
+            => _userRepository.GetAccountCountsAsync();
+
+        public async Task<PageResponse<UserSummaryResponse>> GetUserSummariesAsync(int offset, UserSummaryFilter filters)
+        {
+            if (offset < 0)
+                throw new ValidationException("Offset must be zero or greater.");
+
+            Validator.ValidateProperty(filters.Role, new ValidationContext(filters)
+            {
+                MemberName = nameof(UserSummaryFilter.Role)
+            });
+
+            if (filters.Search?.Length > 200)
+                throw new ValidationException("Search term must be 200 characters or fewer.");
+
+            var users = await _userRepository.GetUserSummariesAsync(offset, PAGE_SIZE, filters);
+            var total = await _userRepository.GetUserSummariesCountAsync(filters);
+            var hasMore = users.Count > PAGE_SIZE;
+            if (hasMore)
+                users.RemoveAt(users.Count - 1);
+
+            var profileKeys = users.Select(u => u.ProfileUrl)
+                .OfType<string>()
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Distinct()
+                .ToList();
+
+            var profiles = profileKeys.Count > 0
+                ? await _storageService.GetPresignedUrlsAsync(B2BucketType.General, profileKeys)
+                : new Dictionary<string, string>();
+
+            foreach (var user in users)
+            {
+                string? profileUrl = null;
+                if (!string.IsNullOrWhiteSpace(user.ProfileUrl))
+                    profiles.TryGetValue(user.ProfileUrl, out profileUrl);
+
+                user.ProfileUrl = profileUrl;
+            }
+
+            return new PageResponse<UserSummaryResponse>
+            {
+                Items = users,
+                HasMore = hasMore,
+                Total = total
+            };
         }
 
         public async Task<UserProfileResponse> GetUserInfoAsync(int userId)

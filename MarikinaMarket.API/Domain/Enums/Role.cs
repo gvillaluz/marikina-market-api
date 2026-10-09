@@ -2,8 +2,9 @@
 {
     public enum Role
     {
-        Admin,
-        Enforcer,
-        Vendor
+        AdminOfficer = 0,
+        MarketEnforcer = 1,
+        MarketVendor = 2,
+        HeadAdmin = 3
     }
 }

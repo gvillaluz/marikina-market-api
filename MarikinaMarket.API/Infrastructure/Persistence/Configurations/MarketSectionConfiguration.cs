@@ -19,6 +19,9 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.CreatedAt)
                 .HasDefaultValueSql("timezone('utc', now())");
+
+            builder.Property(x => x.IsActive)
+                .HasDefaultValue(true);
         }
     }
 }

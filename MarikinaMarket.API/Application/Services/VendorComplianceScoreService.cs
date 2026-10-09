@@ -1,6 +1,8 @@
 using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.DTOs.Vendor.Response;
 using MarikinaMarket.API.Application.Interfaces.Services;
+using MarikinaMarket.API.Application.Interfaces.Repositories;
+using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 
 namespace MarikinaMarket.API.Application.Services
@@ -11,6 +13,49 @@ namespace MarikinaMarket.API.Application.Services
         private const int MaximumTickets = 5;
         private const int RecencyHalfLifeDays = 30;
         private const int MonetaryDueDays = 15;
+        private readonly IVendorRepository _vendorRepository;
+        private readonly ITicketRepository _ticketRepository;
+        private readonly IUnitOfWork _unitOfWork;
+
+        public VendorComplianceScoreService(IVendorRepository vendorRepository,
+            ITicketRepository ticketRepository, IUnitOfWork unitOfWork)
+        {
+            _vendorRepository = vendorRepository;
+            _ticketRepository = ticketRepository;
+            _unitOfWork = unitOfWork;
+        }
+
+        public async Task<VendorComplianceScoreResponse> RefreshAsync(int vendorId, DateTime calculatedAt)
+        {
+            var vendor = await _vendorRepository.GetVendorProfileForUpdateAsync(vendorId)
+                ?? throw new RecordNotFoundException("Vendor not found while updating compliance score.");
+            var tickets = await _ticketRepository.GetVendorComplianceTicketsAsync(
+                [vendorId], calculatedAt.AddDays(-WindowDays), calculatedAt);
+            var response = Calculate(tickets, calculatedAt);
+            UpdateScore(vendor, response);
+            await _unitOfWork.SaveChangesAsync();
+            return response;
+        }
+
+        public async Task RefreshAllAsync(DateTime calculatedAt)
+        {
+            var vendors = await _vendorRepository.GetVendorProfilesForComplianceUpdateAsync();
+            if (vendors.Count == 0) return;
+
+            // One ticket query for all vendors, before score filters or pagination are applied.
+            var tickets = await _ticketRepository.GetVendorComplianceTicketsAsync(
+                vendors.Select(v => v.Id).ToArray(), calculatedAt.AddDays(-WindowDays), calculatedAt);
+            var ticketsByVendor = tickets.ToLookup(t => t.VendorId);
+            foreach (var vendor in vendors)
+                UpdateScore(vendor, Calculate(ticketsByVendor[vendor.Id].ToList(), calculatedAt));
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        private static void UpdateScore(VendorProfile vendor, VendorComplianceScoreResponse response)
+        {
+            vendor.ComplianceScore = response.ComplianceScore;
+            vendor.ScoreUpdatedAt = response.CalculatedAt;
+        }
 
         public VendorComplianceScoreResponse Calculate(
             IReadOnlyCollection<VendorComplianceTicket> tickets,

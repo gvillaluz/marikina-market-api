@@ -20,10 +20,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         public Task<List<VendorLookupResult>> GetVendorByBusinessId(string businessId);
         public Task<VendorLookupResult?> GetVendorByQrCode(string codeValue);
         public Task<VendorProfileDetails?> GetVendorProfileDetailsAsync(int vendorId);
-        public Task<List<VendorComplianceTicket>> GetVendorComplianceTicketsAsync(
-            int vendorId,
-            DateTime windowStart,
-            DateTime calculatedAt);
+        public Task<List<VendorProfile>> GetVendorProfilesForComplianceUpdateAsync();
         public Task<VendorProfile?> GetVendorProfileForUpdateAsync(int vendorId);
         public Task<List<AdminVendorSummary>> GetAdminVendorSummariesAsync(
             int offset,

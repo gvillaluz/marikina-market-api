@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MarikinaMarket.API.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261004112902_RemoveVendorRegistrationUsername")]
-    partial class RemoveVendorRegistrationUsername
+    [Migration("20261005055212_AddActiveStatusToMarketSectionsAndOrdinances")]
+    partial class AddActiveStatusToMarketSectionsAndOrdinances
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -104,6 +104,12 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("name");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active")
+                        .HasDefaultValue(true);
 
                     b.HasKey("Id")
                         .HasName("pk_market_sections");
@@ -261,6 +267,12 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)")
                         .HasColumnName("title");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active")
+                        .HasDefaultValue(true);
 
                     b.HasKey("Id")
                         .HasName("pk_ordinances");

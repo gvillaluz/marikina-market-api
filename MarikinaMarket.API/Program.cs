@@ -6,6 +6,7 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Application.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Infrastructure.Json;
+using MarikinaMarket.API.Infrastructure.BackgroundServices;
 using MarikinaMarket.API.Infrastructure.Persistence;
 using MarikinaMarket.API.Infrastructure.Repositories;
 using MarikinaMarket.API.Presentation.Middleware;
@@ -66,8 +67,10 @@ builder.Services.AddScoped<IMarketSectionRepository, MarketSectionRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IOtpRepository, OtpRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IBackupRepository, BackupRepository>();
 
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IVendorComplianceScoreService, VendorComplianceScoreService>();
@@ -83,6 +86,9 @@ builder.Services.AddScoped<IEnforcerService, EnforcerService>();
 builder.Services.AddScoped<IStorageService, StorageService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
+builder.Services.AddScoped<IBackupService, BackupService>();
+builder.Services.AddHostedService<AutomaticBackupService>();
+builder.Services.AddHostedService<OverdueTicketCheckerService>();
 
 builder.Services.AddAuthentication(options =>
 {

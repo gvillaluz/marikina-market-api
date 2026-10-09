@@ -143,7 +143,7 @@ namespace MarikinaMarket.API.Application.Services
                 PhoneNumber = user.PhoneNumber!,
                 Email = user.Email!,
                 Status = user.Status,
-                Role = userRole ?? Role.Enforcer,
+                Role = userRole ?? Role.MarketEnforcer,
                 HiredAt = user.CreatedAt,
                 ProfileUrl = user.ProfilePictureUrl ?? null,
                 LastInspectionDate = lastInspection

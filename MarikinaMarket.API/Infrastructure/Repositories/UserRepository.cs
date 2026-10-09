@@ -1,10 +1,13 @@
 ﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
+using MarikinaMarket.API.Application.DTOs.User.Request;
+using MarikinaMarket.API.Application.DTOs.User.Response;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using MarikinaMarket.API.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using MarikinaMarket.API.Application;
 
 namespace MarikinaMarket.API.Infrastructure.Repositories
 {
@@ -24,6 +27,82 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task<AccountCountsResponse> GetAccountCountsAsync()
+        {
+            var users = _context.Users.AsNoTracking();
+            return new AccountCountsResponse
+            {
+                TotalStaffUsers = await users.CountAsync(u => _context.UserRoles.Any(ur =>
+                    ur.UserId == u.Id && _context.Roles.Any(r => r.Id == ur.RoleId &&
+                        (r.Name == nameof(Role.HeadAdmin) || r.Name == nameof(Role.AdminOfficer) ||
+                         r.Name == nameof(Role.MarketEnforcer))))),
+                TotalMarketVendorUsers = await users.CountAsync(u => _context.UserRoles.Any(ur =>
+                    ur.UserId == u.Id && _context.Roles.Any(r => r.Id == ur.RoleId &&
+                        r.Name == nameof(Role.MarketVendor)))),
+                TotalAdministrators = await users.CountAsync(u => _context.UserRoles.Any(ur =>
+                    ur.UserId == u.Id && _context.Roles.Any(r => r.Id == ur.RoleId &&
+                        (r.Name == nameof(Role.HeadAdmin) || r.Name == nameof(Role.AdminOfficer))))),
+                TotalActiveAccounts = await users.CountAsync(u => u.Status == AccountStatus.Active)
+            };
+        }
+
+        public async Task<List<UserSummaryResponse>> GetUserSummariesAsync(int offset, int limit, UserSummaryFilter filters)
+        {
+            return await ApplyUserSummaryFilters(_context.Users.AsNoTracking(), filters)
+                .OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ThenBy(u => u.Id)
+                .Skip(offset)
+                .Take(limit + 1)
+                .Select(u => new UserSummaryResponse
+                {
+                    Id = u.Id,
+                    Role = (from ur in _context.UserRoles
+                            join r in _context.Roles on ur.RoleId equals r.Id
+                            where ur.UserId == u.Id
+                            orderby r.Name == nameof(Role.HeadAdmin) ? 0 : r.Id
+                            select r.Name == nameof(Role.HeadAdmin) ? (Role?)Role.HeadAdmin :
+                                   r.Name == nameof(Role.AdminOfficer) ? (Role?)Role.AdminOfficer :
+                                   r.Name == nameof(Role.MarketEnforcer) ? (Role?)Role.MarketEnforcer :
+                                   r.Name == nameof(Role.MarketVendor) ? (Role?)Role.MarketVendor : null)
+                           .FirstOrDefault(),
+                    Username = u.UserName ?? "",
+                    FirstName = u.FirstName,
+                    LastName = u.LastName,
+                    MiddleName = u.MiddleName,
+                    Email = u.Email ?? "",
+                    PhoneNumber = u.PhoneNumber ?? "",
+                    ProfileUrl = u.ProfilePictureUrl,
+                    Status = u.Status
+                })
+                .ToListAsync();
+        }
+
+        public Task<int> GetUserSummariesCountAsync(UserSummaryFilter filters)
+            => ApplyUserSummaryFilters(_context.Users.AsNoTracking(), filters).CountAsync();
+
+        private IQueryable<User> ApplyUserSummaryFilters(IQueryable<User> query, UserSummaryFilter filters)
+        {
+            if (!string.IsNullOrEmpty(filters.Role) &&
+                !string.Equals(filters.Role, "All", StringComparison.OrdinalIgnoreCase))
+            {
+                var roleName = Enum.Parse<Role>(filters.Role, ignoreCase: true).ToString();
+                query = query.Where(u => _context.UserRoles.Any(ur => ur.UserId == u.Id &&
+                    _context.Roles.Any(r => r.Id == ur.RoleId && r.Name == roleName)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filters.Search))
+            {
+                var term = filters.Search.Trim().ToLower();
+                query = query.Where(u => u.FirstName.ToLower().Contains(term) ||
+                    u.LastName.ToLower().Contains(term) ||
+                    (u.MiddleName != null && u.MiddleName.ToLower().Contains(term)) ||
+                    (u.UserName != null && u.UserName.ToLower().Contains(term)) ||
+                    (u.Email != null && u.Email.ToLower().Contains(term)) ||
+                    (u.PhoneNumber != null && u.PhoneNumber.Contains(term)));
+            }
+
+            return query;
+        }
+
         public async Task<IdentityResult> CreateUserAsync(User user, string password)
         {
             return await _userManager.CreateAsync(user, password);
@@ -31,7 +110,14 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<IdentityResult> CreateUserWithPassAsync(User user)
         {
-            return await _userManager.CreateAsync(user);
+            try
+            {
+                return await _userManager.CreateAsync(user);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
+            }
         }
 
         public async Task<User?> FindByUserNameAsync(string username)
@@ -51,7 +137,14 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<IdentityResult> AddToRoleAsync(User user, string role)
         {
-            return await _userManager.AddToRoleAsync(user, role);
+            try
+            {
+                return await _userManager.AddToRoleAsync(user, role);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
+            }
         }
 
         public async Task<Role?> GetRoleAsync(User user)
@@ -61,6 +154,12 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             return Enum.TryParse<Role>(roleName, out var role)
                 ? role
                 : null;
+        }
+
+        public Task<bool> RoleExistsAsync(Role role)
+        {
+            var normalizedName = role.ToString().ToUpperInvariant();
+            return _context.Roles.AsNoTracking().AnyAsync(r => r.NormalizedName == normalizedName);
         }
 
         public async Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refreshToken)
@@ -162,7 +261,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         {
             query = query.Where(u => _context.UserRoles
                 .Any(ur => ur.UserId == u.Id && _context.Roles
-                    .Any(r => r.Id == ur.RoleId && r.Name == nameof(Role.Enforcer))));
+                    .Any(r => r.Id == ur.RoleId && r.Name == nameof(Role.MarketEnforcer))));
 
             if (filters.Status.HasValue)
             {

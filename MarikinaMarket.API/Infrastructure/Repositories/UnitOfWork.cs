@@ -2,6 +2,7 @@
 using MarikinaMarket.API.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
+using MarikinaMarket.API.Application;
 
 namespace MarikinaMarket.API.Infrastructure.Repositories
 {
@@ -36,6 +37,11 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     await _currentTransaction.CommitAsync();
                 }
             }
+            catch (DbUpdateConcurrencyException)
+            {
+                await RollbackAsync();
+                throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
+            }
             catch
             {
                 await RollbackAsync();
@@ -64,7 +70,14 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<int> SaveChangesAsync()
         {
-            return await _context.SaveChangesAsync();
+            try
+            {
+                return await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
+            }
         }
 
         private async Task DisposeTransactionAsync()

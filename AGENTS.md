@@ -9,6 +9,7 @@
 
 ## Security
 
+- Never trust the client. Validate every request field, file type, size, and id on the server, even if the frontend already checks it.
 - Take the current user/admin id from JWT claims, never from the request body.
 - Restrict endpoints with [Authorize(Roles = "...")] on the server. Use AllowAnonymous to the endpoints that are not need to be authenticate.
 - Never print or commit secrets. Use user-secrets.
@@ -16,6 +17,8 @@
 ## Code style
 
 - Simple code: small methods, clear names, no speculative abstractions, no duplicated logic.
+  Don't overengineer. have a high confidence.
+- Follow the existing coding pattern in Services and Repository like TicketService.
 - Async all the way. Never use .Result or .Wait().
 - Dates stored in UTC. Business dates use Asia/Manila time and are converted before querying.
 - Wrap multi-step writes (user + vendor, report + snapshot) in one transaction.

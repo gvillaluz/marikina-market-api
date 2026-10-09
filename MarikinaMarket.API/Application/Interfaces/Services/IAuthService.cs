@@ -6,8 +6,10 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
 {
     public interface IAuthService
     {
-        Task<LoginResponse> LoginAsync(LoginRequest request);
-        Task<LoginMobileResponse> LoginMobileAsync(LoginRequest request);
+        Task<SendCodeResponse> LoginAsync(LoginRequest request);
+        Task<SendCodeResponse> LoginMobileAsync(LoginRequest request);
+        Task<LoginResponse> VerifyLoginAsync(LoginVerificationRequest request);
+        Task<LoginMobileResponse> VerifyLoginMobileAsync(LoginVerificationRequest request);
         Task<RegisterResponse> RegisterAsync(RegisterRequest request);
         Task<TokenRefreshResponse> RefreshTokensAsync(TokenRefreshRequest request);
         Task<LoginResponse> RefreshAccessTokenAsync(AccessTokenRefreshRequest request);

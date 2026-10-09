@@ -1,8 +1,12 @@
+using MarikinaMarket.API.Domain.Enums;
+
 namespace MarikinaMarket.API.Application.DTOs.Vendor.Response
 {
     public class RegistrationDeclinedResponse
     {
         public int RegistrationId { get; set; }
+        public RequestStatus Status { get; set; }
+        public bool EmailSent { get; set; }
         public required string FirstName { get; set; }
         public string? MiddleName { get; set; }
         public required  string LastName { get; set; }

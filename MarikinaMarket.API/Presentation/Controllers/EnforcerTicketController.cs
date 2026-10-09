@@ -11,7 +11,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 {
     [ApiController]
     [Route("api/enforcer/tickets")]
-    [Authorize(Roles = nameof(Role.Enforcer))]
+    [Authorize(Roles = nameof(Role.MarketEnforcer))]
     public class EnforcerTicketController : ControllerBase
     {
         private readonly ITicketService _service;

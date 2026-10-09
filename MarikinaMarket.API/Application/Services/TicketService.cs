@@ -489,7 +489,7 @@ namespace MarikinaMarket.API.Application.Services
                 var newTicket = await _ticketRepository.AddTicketAsync(ticket);
 
                 await _unitOfWork.SaveChangesAsync();
-                await UpdateVendorComplianceScoreAsync(vendor.Id);
+                await _complianceScoreService.RefreshAsync(vendor.Id, DateTime.UtcNow);
                 await _unitOfWork.CommitAsync();
 
                 if (!string.IsNullOrEmpty(vendor.Email))
@@ -756,31 +756,42 @@ namespace MarikinaMarket.API.Application.Services
 
         public async Task<UpdateStatusResponse> UpdateTicketStatusAsync(int ticketId, UpdateStatusRequest request)
         {
-            var ticket = await _ticketRepository.GetTicketByIdAsync(ticketId);
+            Ticket ticket;
+            TicketStatus? previousStatus;
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                ticket = await _ticketRepository.GetTicketByIdAsync(ticketId)
+                    ?? throw new RecordNotFoundException("Ticket not found.");
+                previousStatus = ticket.Status;
 
-            if (ticket is null) throw new RecordNotFoundException("Ticket not found.");
+                _ticketRepository.SetOriginalVersion(ticket, request.Version);
+                ticket.Status = request.NewStatus;
+                ticket.UpdatedAt = DateTime.UtcNow;
+                if (request.NewStatus is TicketStatus.Paid or TicketStatus.Cleared or TicketStatus.Waived)
+                    ticket.ResolvedAt = previousStatus == request.NewStatus && ticket.ResolvedAt.HasValue
+                        ? ticket.ResolvedAt
+                        : ticket.UpdatedAt;
+                else
+                    ticket.ResolvedAt = null;
 
-            var previousStatus = ticket.Status;
-
-            _ticketRepository.SetOriginalVersion(ticket, request.Version);
-            ticket.Status = request.NewStatus;
-            ticket.UpdatedAt = DateTime.UtcNow;
-            if (request.NewStatus is TicketStatus.Paid or TicketStatus.Cleared or TicketStatus.Waived)
-                ticket.ResolvedAt = previousStatus == request.NewStatus && ticket.ResolvedAt.HasValue
-                    ? ticket.ResolvedAt
-                    : ticket.UpdatedAt;
-            else
-                ticket.ResolvedAt = null;
-
-            await _notificationService.SaveNotificationAsync(
-                ticket.Id,
-                ticket.EnforcerId,
-                $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.",
-                ticket.Status ?? TicketStatus.Pending
-            );
-            await _ticketRepository.SaveChangesAsync();
-            if (ticket.Type == ViolationType.Ticket)
-                await UpdateVendorComplianceScoreAsync(ticket.VendorId);
+                await _notificationService.SaveNotificationAsync(
+                    ticket.Id,
+                    ticket.EnforcerId,
+                    $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.",
+                    ticket.Status ?? TicketStatus.Pending
+                );
+                // The calculation queries persisted tickets, so flush before refreshing within this transaction.
+                await _ticketRepository.SaveChangesAsync();
+                if (ticket.Type == ViolationType.Ticket)
+                    await _complianceScoreService.RefreshAsync(ticket.VendorId, DateTime.UtcNow);
+                await _unitOfWork.CommitAsync();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
 
             if (!string.IsNullOrEmpty(ticket?.Vendor?.User?.Email))
             {
@@ -972,24 +983,48 @@ namespace MarikinaMarket.API.Application.Services
 
         public async Task<int> CheckAndNotifyOverdueTicketsAsync()
         {
-            var newlyOverdueTickets = await _ticketRepository.GetNewlyOverdueTicketsAsync();
+            List<Ticket> newlyOverdueTickets;
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                newlyOverdueTickets = await _ticketRepository.GetNewlyOverdueTicketsAsync();
+                if (newlyOverdueTickets.Count == 0)
+                {
+                    await _unitOfWork.CommitAsync();
+                    return 0;
+                }
+                var calculatedAt = DateTime.UtcNow;
+                foreach (var ticket in newlyOverdueTickets)
+                {
+                    var previousStatus = ticket.Status;
+                    ticket.Status = TicketStatus.Overdue;
+                    ticket.UpdatedAt = calculatedAt;
 
+                    await _notificationService.SaveNotificationAsync(
+                        ticket.Id,
+                        ticket.EnforcerId,
+                        $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.",
+                        TicketStatus.Overdue
+                    );
+                }
+                await _ticketRepository.SaveChangesAsync();
+                foreach (var vendorId in newlyOverdueTickets.Select(t => t.VendorId).Distinct())
+                    await _complianceScoreService.RefreshAsync(vendorId, calculatedAt);
+                await _unitOfWork.CommitAsync();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
+
+            // External delivery failures cannot leave persisted statuses and scores out of sync.
             foreach (var ticket in newlyOverdueTickets)
             {
-                var previousStatus = ticket.Status;
-                ticket.Status = TicketStatus.Overdue;
-                ticket.UpdatedAt = DateTime.UtcNow;
-
                 await _notificationService.SendPushNotificationAsync(
                     ticket.EnforcerId,
                     $"Ticket #{ticket.ControlNumber} Overdue",
-                    $"{ticket.Vendor?.BusinessName}'s ticket is now overdue. Payment was due 15 days ago."
-                );
-
-                await _notificationService.SaveNotificationAsync(
-                    ticket.Id, 
-                    ticket.EnforcerId, 
-                    $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.", ticket.Status ?? TicketStatus.Pending
+                    $"{ticket.Vendor?.BusinessName}'s ticket is now overdue. It has not been paid or settled within 5 days of issuance."
                 );
 
                 if (!string.IsNullOrEmpty(ticket.Vendor?.User?.Email))
@@ -1010,7 +1045,7 @@ namespace MarikinaMarket.API.Application.Services
                         <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
                             <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.ControlNumber}</td></tr>
                             <tr><td style=""padding: 4px 0; color: #666;"">Total Penalty</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">PHP {ticket.TotalPaymentAmount:N2}</td></tr>
-                            <tr><td style=""padding: 4px 0; color: #666;"">Original Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.IssuedAt.AddDays(15):MMMM dd, yyyy}</td></tr>
+                            <tr><td style=""padding: 4px 0; color: #666;"">Original Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.IssuedAt.AddDays(5):MMMM dd, yyyy}</td></tr>
                         </table>
                     </div>
 
@@ -1026,33 +1061,7 @@ namespace MarikinaMarket.API.Application.Services
                 }
             }
 
-            if (newlyOverdueTickets.Count > 0)
-            {
-                await _ticketRepository.SaveChangesAsync();
-                foreach (var vendorId in newlyOverdueTickets.Select(t => t.VendorId).Distinct())
-                    await UpdateVendorComplianceScoreAsync(vendorId);
-            }
-
             return newlyOverdueTickets.Count;
-        }
-
-        private async Task UpdateVendorComplianceScoreAsync(int vendorId)
-        {
-            var vendor = await _vendorRepository.GetVendorProfileForUpdateAsync(vendorId);
-            if (vendor is null)
-                throw new RecordNotFoundException("Vendor not found while updating compliance score.");
-
-            var calculatedAt = DateTime.UtcNow;
-            var tickets = await _vendorRepository.GetVendorComplianceTicketsAsync(
-                vendorId,
-                calculatedAt.AddDays(-365),
-                calculatedAt);
-            var complianceScore = _complianceScoreService.Calculate(tickets, calculatedAt);
-
-            vendor.ComplianceScore = complianceScore.ComplianceScore;
-            vendor.ScoreUpdatedAt = calculatedAt;
-
-            await _unitOfWork.SaveChangesAsync();
         }
 
         private static double? CalculatePercentChange(int previous, int current)

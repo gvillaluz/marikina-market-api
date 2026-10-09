@@ -1,4 +1,4 @@
-using MarikinaMarket.API.Application.DTOs.User.Request;
+﻿using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.DTOs.Vendor.Request;
@@ -8,7 +8,6 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Encodings.Web;
 using System.Security.Cryptography;
@@ -24,6 +23,7 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IVendorComplianceScoreService _complianceScoreService;
         private readonly IStorageService _storageService;
         private readonly IEmailService _emailService;
+        private readonly ILogger<VendorService> _logger;
 
         public VendorService(
             IUserRepository userRepository, 
@@ -32,7 +32,8 @@ namespace MarikinaMarket.API.Application.Services
             IMarketSectionRepository marketSectionRepository,
             IVendorComplianceScoreService complianceScoreService,
             IStorageService storageService,
-            IEmailService emailService)
+            IEmailService emailService,
+            ILogger<VendorService> logger)
         {
             _userRepository = userRepository;
             _vendorRepository = vendorRepository;
@@ -41,6 +42,7 @@ namespace MarikinaMarket.API.Application.Services
             _complianceScoreService = complianceScoreService;
             _storageService = storageService;
             _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<RegisterVendorResponse> CreateVendorRegistryAsync(RegisterVendorRequest request)
@@ -287,7 +289,7 @@ namespace MarikinaMarket.API.Application.Services
                 if (!userResult.Succeeded)
                     throw new ResourceCreationFailedException("Failed to create user account.");
 
-                var roleResult = await _userRepository.AddToRoleAsync(newUser, nameof(Role.Vendor));
+                var roleResult = await _userRepository.AddToRoleAsync(newUser, nameof(Role.MarketVendor));
 
                 if (!roleResult.Succeeded)
                     throw new ResourceCreationFailedException("Failed to assign the vendor role to the new account.");
@@ -326,13 +328,12 @@ namespace MarikinaMarket.API.Application.Services
                         <p style=""color:#777;font-size:12px;margin-top:28px;"">This is an automated message. Please do not reply.</p>
                     </div>";
 
-                await _emailService.SendEmailAsync(
-                    registration.Email,
-                    "Vendor Registration Approved",
-                    emailBody);
+                var emailSent = await SendReviewEmailAsync(
+                    registration, "Vendor Registration Approved", emailBody);
 
                 return new RegistrationApprovalResponse
                 {
+                    RegistrationId = registration.Id,
                     UserId = newUser.Id,
                     VendorId = vendorProfile.Id,
                     FirstName = newUser.FirstName,
@@ -342,12 +343,15 @@ namespace MarikinaMarket.API.Application.Services
                     MarketSectionId = vendorProfile.MarketSectionId,
                     MarketSectionName = marketSection.Name,
                     AdminId = request.AdminId,
-                    Status = VendorStatus.Active,
+                    Status = registration.Status,
+                    VendorStatus = vendorProfile.Status,
+                    ReviewedAt = registration.ReviewedAt.Value,
+                    EmailSent = emailSent,
                     CreatedAt = newUser.CreatedAt,
                     Version = registration.Version
                 };
             }
-            catch (DbUpdateConcurrencyException)
+            catch (ConcurrencyConflictException)
             {
                 if (!transactionCommitted)
                     await _unitOfWork.RollbackAsync();
@@ -368,8 +372,8 @@ namespace MarikinaMarket.API.Application.Services
 
             try
             {
-                if (request.RequestStatus is not RequestStatus.Declined)
-                    throw new InvalidRequestException("RequestStatus must be Declined.");
+                if (request.RequestStatus is not RequestStatus.Rejected)
+                    throw new InvalidRequestException("RequestStatus must be Rejected.");
 
                 var registration = await _vendorRepository.GetRegistrationById(registrationId);
 
@@ -409,14 +413,14 @@ namespace MarikinaMarket.API.Application.Services
                         <p style=""color:#777;font-size:12px;margin-top:28px;"">This is an automated message. Please do not reply.</p>
                     </div>";
 
-                await _emailService.SendEmailAsync(
-                    registration.Email,
-                    "Vendor Registration Update",
-                    emailBody);
+                var emailSent = await SendReviewEmailAsync(
+                    registration, "Vendor Registration Update", emailBody);
 
                 return new RegistrationDeclinedResponse
                 {
                     RegistrationId = registration.Id,
+                    Status = registration.Status,
+                    EmailSent = emailSent,
                     FirstName = registration.FirstName,
                     MiddleName = registration.MiddleName,
                     LastName = registration.LastName,
@@ -428,7 +432,7 @@ namespace MarikinaMarket.API.Application.Services
                     Version = registration.Version
                 };
             }
-            catch (DbUpdateConcurrencyException)
+            catch (ConcurrencyConflictException)
             {
                 if (!transactionCommitted)
                     await _unitOfWork.RollbackAsync();
@@ -491,14 +495,14 @@ namespace MarikinaMarket.API.Application.Services
                         <p style=""color:#777;font-size:12px;margin-top:28px;"">This is an automated message. Please do not reply.</p>
                     </div>";
 
-                await _emailService.SendEmailAsync(
-                    registration.Email,
-                    "More Information Required for Vendor Registration",
-                    emailBody);
+                var emailSent = await SendReviewEmailAsync(
+                    registration, "More Information Required for Vendor Registration", emailBody);
 
                 return new RegistrationDeclinedResponse
                 {
                     RegistrationId = registration.Id,
+                    Status = registration.Status,
+                    EmailSent = emailSent,
                     FirstName = registration.FirstName,
                     MiddleName = registration.MiddleName,
                     LastName = registration.LastName,
@@ -510,7 +514,7 @@ namespace MarikinaMarket.API.Application.Services
                     Version = registration.Version
                 };
             }
-            catch (DbUpdateConcurrencyException)
+            catch (ConcurrencyConflictException)
             {
                 if (!transactionCommitted)
                     await _unitOfWork.RollbackAsync();
@@ -521,6 +525,23 @@ namespace MarikinaMarket.API.Application.Services
                 if (!transactionCommitted)
                     await _unitOfWork.RollbackAsync();
                 throw;
+            }
+        }
+
+        private async Task<bool> SendReviewEmailAsync(
+            VendorRegistrationRequest registration, string subject, string body)
+        {
+            try
+            {
+                await _emailService.SendEmailAsync(registration.Email, subject, body);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    "Review email failed for vendor registration {RegistrationId}. Error type: {ErrorType}",
+                    registration.Id, ex.GetType().Name);
+                return false;
             }
         }
 
@@ -623,8 +644,21 @@ namespace MarikinaMarket.API.Application.Services
             AdminVendorSummaryFilter filters)
         {
             const int pageSize = 10;
-            var vendors = await _vendorRepository.GetAdminVendorSummariesAsync(offset, pageSize, filters);
-            var total = await _vendorRepository.GetAdminVendorSummaryCountAsync(filters);
+            List<AdminVendorSummary> vendors;
+            int total;
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                await _complianceScoreService.RefreshAllAsync(DateTime.UtcNow);
+                vendors = await _vendorRepository.GetAdminVendorSummariesAsync(offset, pageSize, filters);
+                total = await _vendorRepository.GetAdminVendorSummaryCountAsync(filters);
+                await _unitOfWork.CommitAsync();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
 
             return new PageResponse<AdminVendorSummaryResponse>
             {
@@ -831,25 +865,25 @@ namespace MarikinaMarket.API.Application.Services
                 PhoneNumber = vendor.PhoneNumber,
                 Email = vendor.Email,
                 AccountCreatedAt = vendor.AccountCreatedAt,
-                Role = Role.Vendor,
+                Role = Role.MarketVendor,
                 LastViolationIssuedAt = vendor.LastViolationIssuedAt
             };
         }
 
         public async Task<VendorComplianceScoreResponse> GetVendorComplianceScoreAsync(int vendorId)
         {
-            var vendor = await _vendorRepository.GetVendorProfileDetailsAsync(vendorId);
-
-            if (vendor is null)
-                throw new RecordNotFoundException("Vendor not found.");
-
-            var calculatedAt = DateTime.UtcNow;
-            var tickets = await _vendorRepository.GetVendorComplianceTicketsAsync(
-                vendorId,
-                calculatedAt.AddDays(-365),
-                calculatedAt);
-
-            return _complianceScoreService.Calculate(tickets, calculatedAt);
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var response = await _complianceScoreService.RefreshAsync(vendorId, DateTime.UtcNow);
+                await _unitOfWork.CommitAsync();
+                return response;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<PageResponse<AdminPendingTicketSettlementResponse>> GetPendingTicketSettlementsAsync(int offset)

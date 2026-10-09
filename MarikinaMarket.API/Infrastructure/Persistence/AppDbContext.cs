@@ -25,6 +25,8 @@ namespace MarikinaMarket.API.Infrastructure.Persistence
         public DbSet<UserDeviceToken> UserDeviceTokens { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<OtpVerification> OtpVerifications { get; set; }
+        public DbSet<Backup> Backups { get; set; }
+        public DbSet<BackupSchedule> BackupSchedules { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -38,23 +40,30 @@ namespace MarikinaMarket.API.Infrastructure.Persistence
                 new IdentityRole<int>
                 {
                     Id = 1,
-                    Name = "Admin",
-                    NormalizedName = "ADMIN",
+                    Name = "AdminOfficer",
+                    NormalizedName = "ADMINOFFICER",
                     ConcurrencyStamp = "a72b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
                 },
                 new IdentityRole<int>
                 {
                     Id = 2,
-                    Name = "Enforcer",
-                    NormalizedName = "ENFORCER",
+                    Name = "MarketEnforcer",
+                    NormalizedName = "MARKETENFORCER",
                     ConcurrencyStamp = "b83c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
                 },
                 new IdentityRole<int>
                 {
                     Id = 3,
-                    Name = "Vendor",
-                    NormalizedName = "VENDOR",
+                    Name = "MarketVendor",
+                    NormalizedName = "MARKETVENDOR",
                     ConcurrencyStamp = "c94d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f"
+                },
+                new IdentityRole<int>
+                {
+                    Id = 4,
+                    Name = "HeadAdmin",
+                    NormalizedName = "HEADADMIN",
+                    ConcurrencyStamp = "d05e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f90"
                 }
             );
 

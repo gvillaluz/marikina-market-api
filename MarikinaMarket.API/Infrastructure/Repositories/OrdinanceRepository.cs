@@ -24,7 +24,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 {
                     OrdinanceId = o.Id,
                     OrdinanceNo = o.OrdinanceNo,
-                    Code = o.Code,
+                    Code = o.MarketCode,
                     Title = o.Title,
                     Category = o.Category,
                     PenaltyTiers = o.PenaltyTiers
@@ -48,6 +48,38 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .Include(o => o.PenaltyTiers)
                 .AsNoTracking()
                 .ToListAsync();
+        }
+
+        public async Task<Ordinance?> GetByIdAsync(int id)
+        {
+            return await _context.Ordinances.Include(o => o.PenaltyTiers)
+                .FirstOrDefaultAsync(o => o.Id == id);
+        }
+
+        public async Task<bool> NumberExistsAsync(string ordinanceNo, int? excludingId = null)
+        {
+            return await _context.Ordinances.AnyAsync(o => o.OrdinanceNo == ordinanceNo
+                && (!excludingId.HasValue || o.Id != excludingId.Value));
+        }
+
+        public async Task AddAsync(Ordinance ordinance)
+        {
+            await _context.Ordinances.AddAsync(ordinance);
+        }
+
+        public async Task AddTiersAsync(IEnumerable<OrdinancePenaltyTier> tiers)
+        {
+            await _context.OrdinancePenaltyTiers.AddRangeAsync(tiers);
+        }
+
+        public void RemoveTiers(IEnumerable<OrdinancePenaltyTier> tiers)
+        {
+            _context.OrdinancePenaltyTiers.RemoveRange(tiers);
+        }
+
+        public async Task<int> GetActiveCountAsync()
+        {
+            return await _context.Ordinances.CountAsync(ordinance => ordinance.IsActive);
         }
     }
 }

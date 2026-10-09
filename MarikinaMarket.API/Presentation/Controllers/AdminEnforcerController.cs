@@ -11,7 +11,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 {
     [ApiController]
     [Route("api/admin/enforcers")]
-    [Authorize(Roles = nameof(Role.Admin))]
+    [Authorize(Roles = $"{nameof(Role.HeadAdmin)},{nameof(Role.AdminOfficer)}")]
     public class AdminEnforcerController : ControllerBase
     {
         private readonly IEnforcerService _enforcerService;

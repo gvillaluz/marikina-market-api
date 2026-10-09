@@ -4,10 +4,11 @@ namespace MarikinaMarket.API.Application.DTOs.Auth.Request
 {
     public class SendCodeRequest
     {
-        [Required(ErrorMessage = "Username must not be empty.")]
+        [Required(ErrorMessage = "Username is required.")]
         public required string Username { get; set; }
 
-        [Required(ErrorMessage = "Channel option must not be empty.")]
+        [Required(ErrorMessage = "Choose a delivery method.")]
+        [RegularExpression(@"(?i)\Aemail\z", ErrorMessage = "Only email is supported.")]
         public required string Channel { get; set; }
     }
 }

@@ -10,7 +10,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
 {
     [ApiController]
     [Route("api/admin/tickets")]
-    [Authorize(Roles = nameof(Role.Admin))]
+    [Authorize(Roles = $"{nameof(Role.HeadAdmin)},{nameof(Role.AdminOfficer)}")]
     public class AdminTicketController : ControllerBase 
     {
         private readonly ITicketService _service;

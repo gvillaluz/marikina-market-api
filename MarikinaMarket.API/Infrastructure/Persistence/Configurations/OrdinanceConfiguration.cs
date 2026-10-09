@@ -11,6 +11,13 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
             builder.Property(x => x.OrdinanceNo)
                 .HasMaxLength(100);
 
+            builder.Property(x => x.Series)
+                .IsRequired();
+
+            builder.Property(x => x.MarketCode)
+                .HasColumnName("market_code")
+                .IsRequired();
+
             builder.HasIndex(x => x.OrdinanceNo)
                 .IsUnique();
 
@@ -25,6 +32,12 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.CreatedAt)
                 .HasDefaultValueSql("timezone('utc', now())");
+            
+            builder.Property(x => x.UpdatedAt)
+                .HasDefaultValueSql("timezone('utc', now())");
+
+            builder.Property(x => x.IsActive)
+                .HasDefaultValue(true);
         }
     }
 }
