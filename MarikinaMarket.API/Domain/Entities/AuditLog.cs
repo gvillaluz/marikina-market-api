@@ -5,11 +5,13 @@ namespace MarikinaMarket.API.Domain.Entities
     public class AuditLog
     {
         public int Id { get; set; }
-        public DateTime DateAndTime { get; set; }
-        public required string Activity { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public int? UserId { get; set; }
+        public Role? Role { get; set; }
+        public required string Action { get; set; }
         public Module Module { get; set; }
-        public int PerformedById { get; set; }
-        public User? PerformedBy { get; set; }
+        public string? TargetId { get; set; }
         public LogResult Result { get; set; }
+        public required string Details { get; set; }
     }
 }

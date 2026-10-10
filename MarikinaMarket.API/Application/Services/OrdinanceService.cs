@@ -1,10 +1,11 @@
-﻿using MarikinaMarket.API.Application.DTOs.Ordinance.Response;
+using MarikinaMarket.API.Application.DTOs.Ordinance.Response;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Application.DTOs.SystemConfiguration.Response;
 using MarikinaMarket.API.Domain.Enums;
 using MarikinaMarket.API.Application.DTOs.Ordinance.Request;
 using MarikinaMarket.API.Domain.Entities;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -12,11 +13,16 @@ namespace MarikinaMarket.API.Application.Services
     {
         private readonly IOrdinanceRepository _repository;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly AuditLogContext? _audit;
+        private readonly IAuditLogService? _auditService;
 
-        public OrdinanceService(IOrdinanceRepository repository, IUnitOfWork unitOfWork)
+        public OrdinanceService(IOrdinanceRepository repository, IUnitOfWork unitOfWork, AuditLogContext? audit = null,
+            IAuditLogService? auditService = null)
         {
             _repository = repository;
             _unitOfWork = unitOfWork;
+            _audit = audit;
+            _auditService = auditService;
         }
 
         public async Task<List<OrdinanceSummaryResponse>> GetOrdinances()
@@ -72,6 +78,8 @@ namespace MarikinaMarket.API.Application.Services
                 ordinance.PenaltyTiers = tiers;
                 await _repository.AddTiersAsync(tiers);
                 await _unitOfWork.SaveChangesAsync();
+                if (_audit?.Entry is not null) _audit.Entry.TargetId = ordinance.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
                 return Summary(ordinance);
             }
@@ -105,6 +113,7 @@ namespace MarikinaMarket.API.Application.Services
                 ordinance.UpdatedAt = DateTime.UtcNow;
 
                 await _unitOfWork.SaveChangesAsync();
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
                 return Summary(ordinance);
             }

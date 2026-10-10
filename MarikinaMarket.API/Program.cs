@@ -16,6 +16,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Security.Claims;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +62,10 @@ FirebaseApp.Create(new AppOptions()
 builder.Services.AddSingleton(FirebaseApp.DefaultInstance);
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<AuditLogContext>();
+builder.Services.AddScoped<AuditLogActionFilter>();
 builder.Services.AddScoped<IVendorRepository, VendorRepository>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 builder.Services.AddScoped<IOrdinanceRepository, OrdinanceRepository>();
@@ -75,12 +81,13 @@ builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IVendorComplianceScoreService, VendorComplianceScoreService>();
 builder.Services.AddScoped<IAdminAnalyticsService, AdminAnalyticsService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IOrdinanceService, OrdinanceService>();
 builder.Services.AddScoped<IMarketSectionService, MarketSectionService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
-builder.Services.AddSingleton<IEmailService, EmailService>();
-builder.Services.AddSingleton<IPushNotificationService, PushNotificationService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEnforcerService, EnforcerService>();
 builder.Services.AddScoped<IStorageService, StorageService>();
@@ -114,9 +121,28 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero,
         RoleClaimType = "role"
     };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var userIdValue = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var securityStamp = context.Principal?.FindFirst("security_stamp")?.Value;
+            if (!int.TryParse(userIdValue, out var userId) || userId <= 0 || string.IsNullOrEmpty(securityStamp))
+            {
+                context.Fail("Invalid session. Please log in again.");
+                return;
+            }
+
+            var repository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+            var user = await repository.GetUserAsync(userId);
+            if (user is null || !string.Equals(user.SecurityStamp, securityStamp, StringComparison.Ordinal))
+                context.Fail("Session expired. Please log in again.");
+        }
+    };
 });
 
-builder.Services.AddControllers()
+builder.Services.AddControllers(options => options.Filters.AddService<AuditLogActionFilter>())
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = new SnakeCaseNamingPolicy();
@@ -128,9 +154,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAllDev", policy =>
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    options.AddPolicy("ConfiguredOrigins", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod();
     });
@@ -141,7 +168,9 @@ builder.Services.AddTransient<ExceptionHandlingMiddleware>();
 
 var app = builder.Build();
 
-app.UseCors("AllowAllDev");
+app.UseRouting();
+app.UseCors("ConfiguredOrigins");
+app.UseMiddleware<AuditLogMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 

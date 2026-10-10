@@ -94,6 +94,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpPost("change-password")]
+        [Authorize(Roles = nameof(Role.HeadAdmin) + "," + nameof(Role.AdminOfficer) + "," + nameof(Role.MarketEnforcer) + "," + nameof(Role.MarketVendor))]
         public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             var userId = GetUserIdFromClaims();
@@ -138,7 +139,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         private int GetUserIdFromClaims()
         {
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userIdString == null || !int.TryParse(userIdString, out var userId))
+            if (userIdString == null || !int.TryParse(userIdString, out var userId) || userId <= 0)
             {
                 throw new UnauthorizedAccessException("Invalid or missing identity token context.");
             }

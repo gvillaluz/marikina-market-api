@@ -1,4 +1,6 @@
 using MarikinaMarket.API.Application.Interfaces.Services;
+using MarikinaMarket.API.Domain.Entities;
+using MarikinaMarket.API.Domain.Enums;
 
 namespace MarikinaMarket.API.Infrastructure.BackgroundServices
 {
@@ -37,6 +39,11 @@ namespace MarikinaMarket.API.Infrastructure.BackgroundServices
                 }
                 catch (Exception ex)
                 {
+                    await scope.ServiceProvider.GetRequiredService<IAuditLogService>().RecordAsync(new AuditLog
+                    {
+                        Action = "ProcessOverdueTickets", Module = Module.Tickets, Result = LogResult.Failed,
+                        Details = "System overdue-ticket processing failed."
+                    });
                     _logger.LogError(ex, "Failed to check overdue tickets.");
                 }
 

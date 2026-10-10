@@ -5,6 +5,7 @@ using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -15,18 +16,23 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IUserRepository _userRepository;
         private readonly INotificationRepository _notificationRepository;
         private const int PAGE_SIZE = 10;
+        private readonly IAuditLogService? _auditService;
+        private readonly AuditLogContext? _audit;
 
         public NotificationService(
             IPushNotificationService pushNotificationService,
             IEmailService emailService,
             IUserRepository userRepository,
-            INotificationRepository notificationRepository
+            INotificationRepository notificationRepository,
+            IAuditLogService? auditService = null, AuditLogContext? audit = null
             )
         {
             _pushNotificationService = pushNotificationService;
             _emailService = emailService;
             _userRepository = userRepository;
             _notificationRepository = notificationRepository;
+            _auditService = auditService;
+            _audit = audit;
         }
 
         public async Task<PageResponse<GetNotificationsResponse>> GetNotificationsByEnforcerIdAsync(int enforcerId, int offset, string filter)
@@ -94,7 +100,17 @@ namespace MarikinaMarket.API.Application.Services
             var deviceTokens = await _userRepository.GetDeviceTokensByIdAsync(userId);
 
             if (deviceTokens is null || deviceTokens.Count == 0)
+            {
+                if (_auditService is not null)
+                    await _auditService.RecordAsync(new AuditLog
+                    {
+                        UserId = _audit?.Entry?.UserId, Role = _audit?.Entry?.Role,
+                        Action = "SendPushNotification", Module = Module.Notifications,
+                        TargetId = userId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        Result = LogResult.Failed, Details = $"{_audit?.PerformerDescription ?? "System"} push notification was not delivered because no devices were registered."
+                    });
                 return false;
+            }
 
             var anySucceeded = false;
 
@@ -102,6 +118,20 @@ namespace MarikinaMarket.API.Application.Services
             {
                 var success = await _pushNotificationService.SendAsync(token, title, body, data);
                 if (success)
+                    anySucceeded = true;
+            }
+
+            return anySucceeded;
+        }
+
+        public async Task<bool> SendPushNotificationToAdminsAsync(string title, string body, Dictionary<string, string>? data = null)
+        {
+            var deviceTokens = await _userRepository.GetAdminDeviceTokensAsync();
+            var anySucceeded = false;
+
+            foreach (var token in deviceTokens)
+            {
+                if (await _pushNotificationService.SendAsync(token, title, body, data))
                     anySucceeded = true;
             }
 

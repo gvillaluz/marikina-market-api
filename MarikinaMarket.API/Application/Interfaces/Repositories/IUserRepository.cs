@@ -22,12 +22,16 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         Task<Role?> GetRoleAsync(User user);
         Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refresshToken);
         Task<RefreshToken?> GetRefreshTokenAsync(string refreshToken);
+        Task RevokeRefreshTokensAsync(int userId);
         Task<string> GetNextUserNameAsync();
         Task<User?> GetUserAsync(int userId);
+        Task<Dictionary<int, UserNamesResponse>> GetNamesByIdsAsync(IEnumerable<int> userIds,
+            CancellationToken cancellationToken = default);
         Task<List<User>> GetEnforcersAsync(int offset, int limit, EnforcerSummaryFilter filters);
         Task<IdentityResult> UpdateUserAsync(User user);
         Task<IdentityResult> ChangePasswordAsync(User user, string oldPassword, string newPassword);
         Task<List<string>> GetDeviceTokensByIdAsync(int userId);
+        Task<List<string>> GetAdminDeviceTokensAsync();
         Task<UserDeviceToken?> GetDeviceTokenByValueAsync(string deviceToken);
         Task AddDeviceTokenAsync(UserDeviceToken userDeviceToken);
         Task<string> GenerateResetPassTokenAsync(User user);

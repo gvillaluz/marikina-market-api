@@ -17,7 +17,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
         Task<VerifyCodeResponse> VerifyCodeAsync(VerifyCodeRequest request);
         Task<ResetPasswordResponse> ResetPasswordAsync(ResetPasswordRequest request);
         Task<IdentityResult> MandatoryChangePasswordAsync(ChangePasswordRequest request, int userId);
-        Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId, bool clearMandatoryFlag = false);
+        Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId);
         Task<FindAccountResponse> FindAccountAsync(FindAccountRequest request);
     }
 }

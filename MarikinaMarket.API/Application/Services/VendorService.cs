@@ -1,4 +1,4 @@
-﻿using MarikinaMarket.API.Application.DTOs.User.Request;
+using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.DTOs.Vendor.Request;
@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Identity;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Encodings.Web;
 using System.Security.Cryptography;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -23,7 +24,10 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IVendorComplianceScoreService _complianceScoreService;
         private readonly IStorageService _storageService;
         private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<VendorService> _logger;
+        private readonly AuditLogContext? _audit;
+        private readonly IAuditLogService? _auditService;
 
         public VendorService(
             IUserRepository userRepository, 
@@ -33,7 +37,8 @@ namespace MarikinaMarket.API.Application.Services
             IVendorComplianceScoreService complianceScoreService,
             IStorageService storageService,
             IEmailService emailService,
-            ILogger<VendorService> logger)
+            INotificationService notificationService,
+            ILogger<VendorService> logger, AuditLogContext? audit = null, IAuditLogService? auditService = null)
         {
             _userRepository = userRepository;
             _vendorRepository = vendorRepository;
@@ -42,7 +47,10 @@ namespace MarikinaMarket.API.Application.Services
             _complianceScoreService = complianceScoreService;
             _storageService = storageService;
             _emailService = emailService;
+            _notificationService = notificationService;
             _logger = logger;
+            _audit = audit;
+            _auditService = auditService;
         }
 
         public async Task<RegisterVendorResponse> CreateVendorRegistryAsync(RegisterVendorRequest request)
@@ -130,6 +138,25 @@ namespace MarikinaMarket.API.Application.Services
 
             var savedVendorRegistry = await _vendorRepository.AddVendorRegistryAsync(vendorRegistry);
             await _vendorRepository.SaveChangesAsync();
+
+            if (_audit?.Entry is not null) _audit.Entry.TargetId = savedVendorRegistry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            try
+            {
+                await _notificationService.SendPushNotificationToAdminsAsync(
+                    "New vendor registration request",
+                    $"{savedVendorRegistry.BusinessName} submitted a registration request.",
+                    new Dictionary<string, string>
+                    {
+                        ["type"] = "vendor_registration",
+                        ["registration_id"] = savedVendorRegistry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["status"] = savedVendorRegistry.Status.ToString()
+                    });
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Could not notify admins about vendor registration {RegistrationId}.", savedVendorRegistry.Id);
+            }
 
             var encodedName = HtmlEncoder.Default.Encode(savedVendorRegistry.FirstName);
             var encodedBusinessName = HtmlEncoder.Default.Encode(savedVendorRegistry.BusinessName);
@@ -316,6 +343,7 @@ namespace MarikinaMarket.API.Application.Services
                 var vendorProfile = await _vendorRepository.CreateVendorAsync(vendor);
 
                 await _unitOfWork.SaveChangesAsync();
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
                 transactionCommitted = true;
 
@@ -399,6 +427,7 @@ namespace MarikinaMarket.API.Application.Services
                 registration.RemarksOrReason = request.ReviewRemarks;
 
                 await _unitOfWork.SaveChangesAsync();
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
                 transactionCommitted = true;
 
@@ -482,6 +511,7 @@ namespace MarikinaMarket.API.Application.Services
                 registration.RemarksOrReason = request.ReviewRemarks;
 
                 await _unitOfWork.SaveChangesAsync();
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
                 transactionCommitted = true;
 
@@ -652,6 +682,7 @@ namespace MarikinaMarket.API.Application.Services
                 await _complianceScoreService.RefreshAllAsync(DateTime.UtcNow);
                 vendors = await _vendorRepository.GetAdminVendorSummariesAsync(offset, pageSize, filters);
                 total = await _vendorRepository.GetAdminVendorSummaryCountAsync(filters);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
             }
             catch
@@ -876,6 +907,7 @@ namespace MarikinaMarket.API.Application.Services
             try
             {
                 var response = await _complianceScoreService.RefreshAsync(vendorId, DateTime.UtcNow);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
                 return response;
             }

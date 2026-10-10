@@ -7,6 +7,7 @@ using System.ComponentModel.DataAnnotations;
 using MarikinaMarket.API.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -17,6 +18,8 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IEmailService _emailService;
         private readonly IOtpService _otpService;
+        private readonly AuditLogContext? _audit;
+        private readonly IAuditLogService? _auditService;
         private const int RENEW_AFTER_DAYS = 7;
         private const int REQUIRE_LOGIN_AFTER_DAYS = 60;
         private const int LOGIN_OTP_EXPIRY_MINUTES = 10;
@@ -27,13 +30,15 @@ namespace MarikinaMarket.API.Application.Services
             ITokenService tokenService,
             IUnitOfWork unitOfWork,
             IEmailService emailService,
-            IOtpService otpService)
+            IOtpService otpService, AuditLogContext? audit = null, IAuditLogService? auditService = null)
         {
             _repository = repository;
             _tokenService = tokenService;
             _unitOfWork = unitOfWork;
             _emailService = emailService;
             _otpService = otpService;
+            _audit = audit;
+            _auditService = auditService;
         }
 
         public async Task<SendCodeResponse> LoginAsync(LoginRequest request)
@@ -84,21 +89,41 @@ namespace MarikinaMarket.API.Application.Services
             };
         }
 
+        private async Task SetUserAuditActorAsync(User user)
+        {
+            if (_audit?.Entry is null) return;
+            SetUserAuditActor(user, await _repository.GetRoleAsync(user));
+        }
+
+        private void SetUserAuditActor(User user, Role? role)
+        {
+            if (_audit?.Entry is null) return;
+            _audit.Entry.UserId = user.Id;
+            _audit.Entry.Role = role.HasValue && Enum.IsDefined(role.Value) ? role : null;
+            _audit.Entry.TargetId = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _audit.ActorResolved = true;
+        }
+
         private async Task<User> GetLoginUserAsync(string username, string password, bool mobile)
         {
             var user = await ValidateCredentialsAsync(username, password)
                 ?? throw new InvalidCredentialsException("Invalid username or password.");
 
+            var role = await _repository.GetRoleAsync(user);
+            SetUserAuditActor(user, role);
+
             if (user.Status != AccountStatus.Active)
                 throw new UnauthorizedAccessException("Account is inactive.");
 
-            var role = await _repository.GetRoleAsync(user);
             if (!role.HasValue || !Enum.IsDefined(role.Value) ||
                 (mobile ? role != Role.MarketEnforcer : role == Role.MarketEnforcer))
                 throw new UnauthorizedAccessException("Account cannot use this application.");
 
             if (string.IsNullOrWhiteSpace(user.Email) || !new EmailAddressAttribute().IsValid(user.Email))
+            {
+                if (_audit is not null) _audit.IsSecurityFailure = true;
                 throw new InvalidRequestException("No valid email. Contact an admin.");
+            }
 
             return user;
         }
@@ -112,8 +137,12 @@ namespace MarikinaMarket.API.Application.Services
                 return CreateLoginOtpResponse(latest, user.Email!, "Code already sent.");
 
             var code = await _otpService.GenerateOtpAsync(user.Id, OtpPurpose.TwoFactorAuthentication, LOGIN_OTP_EXPIRY_MINUTES);
-            var otp = await _otpService.GetLatestOtpAsync(user.Id, OtpPurpose.TwoFactorAuthentication)
-                ?? throw new InvalidRequestException("Couldn't create a code. Try again.");
+            var otp = await _otpService.GetLatestOtpAsync(user.Id, OtpPurpose.TwoFactorAuthentication);
+            if (otp is null)
+            {
+                if (_audit is not null) _audit.IsSecurityFailure = true;
+                throw new InvalidRequestException("Couldn't create a code. Try again.");
+            }
 
             await _emailService.SendEmailAsync(user.Email!, "Sign-in verification code",
                 $"<h2>Verify your sign-in</h2><p>Your code is <strong>{code}</strong>.</p>" +
@@ -149,6 +178,7 @@ namespace MarikinaMarket.API.Application.Services
                 OtpVerificationResult.TooManyAttempts => "Too many attempts. Request a new code.",
                 _ => "Invalid or expired code."
             };
+            if (_audit is not null) _audit.IsSecurityFailure = true;
             throw new InvalidRequestException(message);
         }
 
@@ -213,6 +243,8 @@ namespace MarikinaMarket.API.Application.Services
                     throw new ValidationException($"Failed to assign role: {errors}");
                 }
 
+                if (_audit?.Entry is not null) _audit.Entry.TargetId = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
 
                 return new RegisterResponse
@@ -237,6 +269,7 @@ namespace MarikinaMarket.API.Application.Services
             if (user is null)
                 return null;
 
+            if (_audit?.Entry is not null) _audit.Entry.TargetId = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var isPasswordValid = await _repository.CheckPasswordAsync(user, password);
 
             if (isPasswordValid.IsLockedOut)
@@ -249,6 +282,22 @@ namespace MarikinaMarket.API.Application.Services
         }
 
         public async Task<TokenRefreshResponse> RefreshTokensAsync(TokenRefreshRequest request)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var response = await RefreshTokensCoreAsync(request);
+                await _unitOfWork.CommitAsync();
+                return response;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
+        }
+
+        private async Task<TokenRefreshResponse> RefreshTokensCoreAsync(TokenRefreshRequest request)
         {
             var storedRefreshToken = await _repository.GetRefreshTokenAsync(request.RefreshToken);
 
@@ -296,11 +345,13 @@ namespace MarikinaMarket.API.Application.Services
             var principal = await _tokenService.ValidateAccessTokenAsync(request.AccessToken);
             var userIdValue = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            if (!int.TryParse(userIdValue, out var userId))
+            if (!int.TryParse(userIdValue, out var userId) || userId <= 0)
                 throw new SessionExpiredException("Invalid access token. Please log in again.");
 
             var user = await _repository.GetUserAsync(userId);
-            if (user is null)
+            var securityStamp = principal?.FindFirst("security_stamp")?.Value;
+            if (user is null || string.IsNullOrEmpty(securityStamp) ||
+                !string.Equals(user.SecurityStamp, securityStamp, StringComparison.Ordinal))
                 throw new SessionExpiredException("Invalid access token. Please log in again.");
 
             var userRole = await _repository.GetRoleAsync(user);
@@ -314,25 +365,55 @@ namespace MarikinaMarket.API.Application.Services
             };
         }
 
-        public Task<IdentityResult> MandatoryChangePasswordAsync(ChangePasswordRequest request, int userId)
-            => ChangePasswordAsync(request, userId, clearMandatoryFlag: true);
-
-        public async Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId, bool clearMandatoryFlag = false)
+        public async Task<IdentityResult> MandatoryChangePasswordAsync(ChangePasswordRequest request, int userId)
         {
             var user = await _repository.GetUserAsync(userId);
-
             if (user is null)
                 throw new RecordNotFoundException("User not found.");
 
             var result = await _repository.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
-
-            if (result.Succeeded && clearMandatoryFlag)
+            if (result.Succeeded)
             {
                 user.MustChangePassword = false;
                 await _repository.UpdateUserAsync(user);
             }
 
             return result;
+        }
+
+        public async Task<IdentityResult> ChangePasswordAsync(ChangePasswordRequest request, int userId)
+        {
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+            if (userId <= 0)
+                throw new ValidationException("User ID must be greater than zero.");
+
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var user = await _repository.GetUserAsync(userId);
+
+                if (user is null)
+                    throw new RecordNotFoundException("User not found.");
+
+                var result = await _repository.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+
+                if (!result.Succeeded)
+                {
+                    await _unitOfWork.RollbackAsync();
+                    return result;
+                }
+
+                if (_audit?.Entry is not null) _audit.Entry.TargetId = userId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                await _repository.RevokeRefreshTokensAsync(userId);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
+                await _unitOfWork.CommitAsync();
+                return result;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<FindAccountResponse> FindAccountAsync(FindAccountRequest request)
@@ -360,13 +441,17 @@ namespace MarikinaMarket.API.Application.Services
             var user = await _repository.FindByUserNameAsync(request.Username);
 
             if (user is null)
+            {
+                if (_audit is not null) _audit.IsBusinessFailure = true;
                 return new SendCodeResponse
                 {
                     Message = "OTP Sent.",
                     ResendCooldownSeconds = resendCooldownSeconds,
                     CodeExpirySeconds = codeExpirySeconds
                 };
+            }
 
+            if (_audit?.Entry is not null) _audit.Entry.TargetId = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var latestOtp = await _otpService.GetLatestOtpAsync(user.Id, OtpPurpose.ResetPassword);
 
             if (latestOtp is not null)
@@ -429,7 +514,10 @@ namespace MarikinaMarket.API.Application.Services
             if (user is null)
                 return new VerifyCodeResponse { Success = false, ResetToken = null, Message = "Invalid or expired code." };
 
+            if (_audit?.Entry is not null) _audit.Entry.TargetId = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var result = await _otpService.ValidateOtpAsync(user.Id, OtpPurpose.ResetPassword, request.Code);
+            if (result == OtpVerificationResult.Success)
+                await SetUserAuditActorAsync(user);
 
             return result switch
             {
@@ -472,6 +560,7 @@ namespace MarikinaMarket.API.Application.Services
                     Message = "User not found.",
                 };
 
+            if (_audit?.Entry is not null) _audit.Entry.TargetId = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var result = await _repository.ResetPasswordByUsernameAsync(user, request.ResetToken, request.NewPassword);
 
             if (!result.Succeeded) 
@@ -481,6 +570,7 @@ namespace MarikinaMarket.API.Application.Services
                     Message = "Failed to reset password."
                 };
 
+            await SetUserAuditActorAsync(user);
             return new ResetPasswordResponse
             {
                 Success = true,

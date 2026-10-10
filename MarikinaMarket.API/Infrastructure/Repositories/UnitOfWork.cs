@@ -3,6 +3,7 @@ using MarikinaMarket.API.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
 using MarikinaMarket.API.Application;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Infrastructure.Repositories
 {
@@ -10,10 +11,12 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
     {
         private readonly AppDbContext _context; // Your actual DbContext class name
         private IDbContextTransaction? _currentTransaction;
+        private readonly AuditLogContext? _audit;
 
-        public UnitOfWork(AppDbContext context)
+        public UnitOfWork(AppDbContext context, AuditLogContext? audit = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
+            _audit = audit;
         }
 
         public async Task BeginTransactionAsync()
@@ -35,6 +38,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 if (_currentTransaction != null)
                 {
                     await _currentTransaction.CommitAsync();
+                    if (_audit?.Staged == true) _audit.Stored = true;
                 }
             }
             catch (DbUpdateConcurrencyException)
@@ -64,6 +68,11 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             }
             finally
             {
+                if (_currentTransaction is not null && _audit is not null)
+                {
+                    _audit.Staged = false;
+                    _audit.Stored = false;
+                }
                 await DisposeTransactionAsync();
             }
         }

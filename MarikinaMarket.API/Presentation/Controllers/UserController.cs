@@ -18,6 +18,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         public UserController(IUserService service) => _service = service;
 
         [HttpPost("profile")]
+        [Authorize(Roles = nameof(Role.HeadAdmin) + "," + nameof(Role.AdminOfficer) + "," + nameof(Role.MarketEnforcer) + "," + nameof(Role.MarketVendor))]
         public async Task<ActionResult<UserProfileResponse>> EditUserInformation([FromBody] EditUserRequest request)
         {
             var userId = GetUserIdFromClaims();
@@ -26,7 +27,9 @@ namespace MarikinaMarket.API.Presentation.Controllers
             return Ok(userProfile);
         }
 
+        [HttpGet("me")]
         [HttpPost("me")]
+        [Authorize(Roles = nameof(Role.HeadAdmin) + "," + nameof(Role.AdminOfficer) + "," + nameof(Role.MarketEnforcer) + "," + nameof(Role.MarketVendor))]
         public async Task<ActionResult<UserProfileResponse>> GetLoggedInUserInfo()
         {
             var userId = GetUserIdFromClaims();
@@ -37,7 +40,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpPost("device-token")]
-        [Authorize(Roles = nameof(Role.MarketEnforcer))]
+        [Authorize(Roles = nameof(Role.HeadAdmin) + "," + nameof(Role.AdminOfficer) + "," + nameof(Role.MarketEnforcer))]
         public async Task<IActionResult> RegisterDeviceToken([FromBody] RegisterDeviceTokenRequest request)
         {
             var userId = GetUserIdFromClaims();
@@ -64,7 +67,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         private int GetUserIdFromClaims()
         {
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userIdString == null || !int.TryParse(userIdString, out var userId))
+            if (userIdString == null || !int.TryParse(userIdString, out var userId) || userId <= 0)
             {
                 throw new UnauthorizedAccessException("Invalid or missing identity token context.");
             }
