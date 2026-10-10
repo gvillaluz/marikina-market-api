@@ -11,6 +11,7 @@ using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -24,6 +25,8 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IStorageService _storageService;
         private readonly IVendorComplianceScoreService _complianceScoreService;
         private readonly int PAGE_SIZE = 10;
+        private readonly AuditLogContext? _audit;
+        private readonly IAuditLogService? _auditService;
 
         public TicketService(
             ITicketRepository ticketRepository,
@@ -32,7 +35,8 @@ namespace MarikinaMarket.API.Application.Services
             IUnitOfWork unitOfWork,
             IStorageService storageService,
             INotificationService notificationService,
-            IVendorComplianceScoreService complianceScoreService
+            IVendorComplianceScoreService complianceScoreService,
+            AuditLogContext? audit = null, IAuditLogService? auditService = null
             )
         {
             _ticketRepository = ticketRepository;
@@ -42,6 +46,8 @@ namespace MarikinaMarket.API.Application.Services
             _storageService = storageService;
             _notificationService = notificationService;
             _complianceScoreService = complianceScoreService;
+            _audit = audit;
+            _auditService = auditService;
         }
 
         public async Task<MobileDashboardSummaryResponse> GetMobileTicketCountAsync(int enforcerId)
@@ -386,6 +392,8 @@ namespace MarikinaMarket.API.Application.Services
                     await _unitOfWork.SaveChangesAsync();
                     newWarningTicket.ControlNumber = $"WRN-{newWarningTicket.Id:D4}";
                     await _unitOfWork.SaveChangesAsync();
+                    if (_audit?.Entry is not null) _audit.Entry.TargetId = warningTicket.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (_auditService is not null) await _auditService.StageCurrentAsync();
                     await _unitOfWork.CommitAsync();
 
                     if (!string.IsNullOrEmpty(vendor.Email))
@@ -490,6 +498,8 @@ namespace MarikinaMarket.API.Application.Services
 
                 await _unitOfWork.SaveChangesAsync();
                 await _complianceScoreService.RefreshAsync(vendor.Id, DateTime.UtcNow);
+                if (_audit?.Entry is not null) _audit.Entry.TargetId = newTicket.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
 
                 if (!string.IsNullOrEmpty(vendor.Email))
@@ -785,6 +795,7 @@ namespace MarikinaMarket.API.Application.Services
                 await _ticketRepository.SaveChangesAsync();
                 if (ticket.Type == ViolationType.Ticket)
                     await _complianceScoreService.RefreshAsync(ticket.VendorId, DateTime.UtcNow);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
             }
             catch
@@ -847,15 +858,14 @@ namespace MarikinaMarket.API.Application.Services
             offset = Math.Max(offset, 0);
 
             var inspections = await _ticketRepository.GetAdminInspectionAsync(offset, PAGE_SIZE, filters);
+            var totalCount = await _ticketRepository.GetAdminInspectionCountAsync(filters);
 
             if (inspections is null || inspections.Count == 0)
-                return new PageResponse<AdminInspectionSummaryResponse> { Items = [], HasMore = false };
+                return new PageResponse<AdminInspectionSummaryResponse> { Items = [], HasMore = false, Total = totalCount };
 
             bool hasMore = inspections.Count() > PAGE_SIZE;
             if (hasMore)
                 inspections.RemoveAt(inspections.Count - 1);
-
-            var totalCount = await _ticketRepository.GetTotalTicketCountAsync(null);
 
             var inspectionResponse = inspections.Select(t => new AdminInspectionSummaryResponse
             {
@@ -990,6 +1000,7 @@ namespace MarikinaMarket.API.Application.Services
                 newlyOverdueTickets = await _ticketRepository.GetNewlyOverdueTicketsAsync();
                 if (newlyOverdueTickets.Count == 0)
                 {
+                    if (_auditService is not null) await _auditService.StageCurrentAsync();
                     await _unitOfWork.CommitAsync();
                     return 0;
                 }
@@ -1010,6 +1021,15 @@ namespace MarikinaMarket.API.Application.Services
                 await _ticketRepository.SaveChangesAsync();
                 foreach (var vendorId in newlyOverdueTickets.Select(t => t.VendorId).Distinct())
                     await _complianceScoreService.RefreshAsync(vendorId, calculatedAt);
+                if (_auditService is not null)
+                    foreach (var ticket in newlyOverdueTickets)
+                        await _auditService.AddInTransactionAsync(new AuditLog
+                        {
+                            Action = "MarkTicketOverdue", Module = Module.Tickets,
+                            TargetId = ticket.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            Result = LogResult.Success, Details = "System marked a ticket overdue and created its notification."
+                        });
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
             }
             catch

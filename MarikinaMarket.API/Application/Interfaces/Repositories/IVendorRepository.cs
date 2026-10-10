@@ -12,6 +12,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         public Task<VendorRegistrationRequest?> GetRegistrationById(int registrationId);
         public Task<bool> RegistrationExistsAsync(string email, string businessId);
         public Task<VendorRegistrationStatusCounts> GetVendorRegistrationStatusCountsAsync();
+        public Task<DashboardVendorCounts> GetDashboardVendorCountsAsync();
         public Task<List<VendorRegistrationSummary>> GetVendorRegistrationSummariesAsync(
             int offset,
             int pageSize,

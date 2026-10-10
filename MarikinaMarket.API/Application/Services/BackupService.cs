@@ -10,6 +10,7 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using Npgsql;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -31,10 +32,12 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IConfiguration _configuration;
         private readonly IHostApplicationLifetime _lifetime;
         private readonly ILogger<BackupService> _logger;
+        private readonly IAuditLogService _auditService;
+        private readonly AuditLogContext _audit;
 
         public BackupService(IBackupRepository repository, IUnitOfWork unitOfWork,
             IStorageService storage, IConfiguration configuration, IHostApplicationLifetime lifetime,
-            ILogger<BackupService> logger)
+            ILogger<BackupService> logger, IAuditLogService auditService, AuditLogContext audit)
         {
             _repository = repository;
             _unitOfWork = unitOfWork;
@@ -42,6 +45,8 @@ namespace MarikinaMarket.API.Application.Services
             _configuration = configuration;
             _lifetime = lifetime;
             _logger = logger;
+            _auditService = auditService;
+            _audit = audit;
         }
 
         public async Task<BackupResponse> CreateManualAsync(CancellationToken cancellationToken)
@@ -222,6 +227,8 @@ namespace MarikinaMarket.API.Application.Services
                     ? "Backup was cancelled or exceeded its time limit."
                     : $"Backup failed during {stage}.";
                 await RecordFailureAsync(backup, error, occurrence, scheduleUpdatedAt);
+                if (backup.Type == BackupType.Automatic)
+                    await RecordBackupAuditAsync(backup.Id, "CreateAutomaticBackup", LogResult.Failed, "System automatic backup failed.");
                 // Do not attach provider exceptions: they can include credentials or database diagnostics.
                 _logger.LogWarning("Backup {BackupId} failed during {Stage} ({ExceptionType}).", backup.Id, stage, ex.GetType().Name);
                 if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
@@ -236,6 +243,8 @@ namespace MarikinaMarket.API.Application.Services
                 Interlocked.Exchange(ref _isRunning, 0);
             }
 
+            if (backup.Type == BackupType.Automatic)
+                await RecordBackupAuditAsync(backup.Id, "CreateAutomaticBackup", LogResult.Success, "System automatic backup completed.");
             return ToResponse(backup);
         }
 
@@ -422,17 +431,27 @@ namespace MarikinaMarket.API.Application.Services
                         backup.DeletedAt = DateTime.UtcNow;
                         backup.StorageCleanupPending = false;
                         await _repository.SaveChangesAsync(timeout.Token);
+                        await RecordBackupAuditAsync(backup.Id, "CleanupBackup", LogResult.Success, "Expired backup was removed from storage.");
                     }
                     catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                     {
                         backup.DeletedAt = null;
                         backup.StorageCleanupPending = previousCleanupPending;
+                        await RecordBackupAuditAsync(backup.Id, "CleanupBackup", LogResult.Failed, "Backup storage cleanup failed and will be retried.");
                         _logger.LogWarning("Backup {BackupId} retention cleanup will be retried ({ExceptionType}).", backup.Id, ex.GetType().Name);
                     }
                 }
             }
             finally { SettingsGate.Release(); }
         }
+
+        private Task RecordBackupAuditAsync(int id, string action, LogResult result, string details)
+            => _auditService.RecordAsync(new AuditLog
+            {
+                UserId = _audit.Entry?.UserId, Role = _audit.Entry?.Role,
+                Action = action, Module = Module.Backups,
+                TargetId = id.ToString(CultureInfo.InvariantCulture), Result = result, Details = details
+            });
 
         public async Task<BackupScheduleResponse> GetScheduleAsync(CancellationToken cancellationToken)
         {

@@ -39,6 +39,7 @@ namespace MarikinaMarket.API.Application.Services
                 [ClaimTypes.NameIdentifier] = user.Id,
                 ["first_name"] = user.FirstName,
                 ["last_name"] = user.LastName,   
+                ["security_stamp"] = await _userManager.GetSecurityStampAsync(user),
             };
 
             if (roles.Any())

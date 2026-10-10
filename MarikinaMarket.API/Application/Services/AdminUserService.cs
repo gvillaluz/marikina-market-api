@@ -7,6 +7,7 @@ using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -16,17 +17,21 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IEmailService _emailService;
         private readonly ILogger<AdminUserService> _logger;
+        private readonly AuditLogContext? _audit;
+        private readonly IAuditLogService? _auditService;
 
         public AdminUserService(
             IUserRepository repository,
             IUnitOfWork unitOfWork,
             IEmailService emailService,
-            ILogger<AdminUserService> logger)
+            ILogger<AdminUserService> logger, AuditLogContext? audit = null, IAuditLogService? auditService = null)
         {
             _repository = repository;
             _unitOfWork = unitOfWork;
             _emailService = emailService;
             _logger = logger;
+            _audit = audit;
+            _auditService = auditService;
         }
 
         public async Task<AdminUserResponse> CreateUserAsync(CreateAdminUserRequest request, int adminId)
@@ -90,6 +95,8 @@ namespace MarikinaMarket.API.Application.Services
                 if (!roleResult.Succeeded)
                     throw new InvalidRequestException("Could not assign role.");
 
+                if (_audit?.Entry is not null) _audit.Entry.TargetId = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
             }
             catch

@@ -1,6 +1,7 @@
 ﻿using MarikinaMarket.API.Application;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Presentation.Middleware
 {
@@ -19,6 +20,12 @@ namespace MarikinaMarket.API.Presentation.Middleware
             }
             catch (Exception ex)
             {
+                var audit = context.RequestServices.GetService<AuditLogContext>();
+                if (audit is not null)
+                {
+                    audit.IsValidationFailure = !audit.IsSecurityFailure && ex is (ValidationException or InvalidRequestException);
+                    audit.IsBusinessFailure = !audit.IsValidationFailure;
+                }
                 await HandleExceptionAsync(context, ex);
             }
         }

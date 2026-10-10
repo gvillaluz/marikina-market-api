@@ -8,6 +8,9 @@ namespace MarikinaMarket.API.Domain.Enums
         Ordinances, 
         MarketSections,
         Security,
-        Reports
+        Reports,
+        Backups,
+        Notifications,
+        AuditLogs
     }
 }

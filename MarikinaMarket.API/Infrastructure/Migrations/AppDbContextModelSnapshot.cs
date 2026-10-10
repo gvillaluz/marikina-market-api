@@ -25,6 +25,77 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
             modelBuilder.HasSequence<int>("UserSequence", "shared");
 
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("details");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("module");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("result");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("target_id");
+
+                    b.Property<DateTime>("Timestamp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_audit_logs");
+
+                    b.HasIndex("Module", "Timestamp")
+                        .HasDatabaseName("ix_audit_logs_module_timestamp");
+
+                    b.HasIndex("Result", "Timestamp")
+                        .HasDatabaseName("ix_audit_logs_result_timestamp");
+
+                    b.HasIndex("Timestamp", "Id")
+                        .HasDatabaseName("ix_audit_logs_timestamp_id");
+
+                    b.HasIndex("UserId", "Timestamp")
+                        .HasDatabaseName("ix_audit_logs_user_id_timestamp");
+
+                    b.ToTable("audit_logs", (string)null);
+                });
+
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Backup", b =>
                 {
                     b.Property<int>("Id")

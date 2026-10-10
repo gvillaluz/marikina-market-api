@@ -218,10 +218,10 @@ namespace MarikinaMarket.API.Application.Services
 
             foreach (var key in distinctKeys)
             {
-                urlMap[key] = GetPresignedUrlAsync(bucketType, key, expiryInDays).Result;
+                urlMap[key] = await GetPresignedUrlAsync(bucketType, key, expiryInDays);
             }
 
-            return await Task.FromResult(urlMap);
+            return urlMap;
         }
 
         public async Task DeleteFileAsync(B2BucketType bucketType, string key)

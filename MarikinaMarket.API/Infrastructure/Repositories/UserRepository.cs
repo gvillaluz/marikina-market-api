@@ -175,6 +175,18 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .FirstOrDefaultAsync(r => r.Token == refreshToken);
         }
 
+        public async Task RevokeRefreshTokensAsync(int userId)
+        {
+            var tokens = await _context.RefreshTokens
+                .Where(t => t.UserId == userId && !t.IsRevoked)
+                .ToListAsync();
+
+            foreach (var token in tokens)
+                token.IsRevoked = true;
+
+            await _context.SaveChangesAsync();
+        }
+
         public async Task SaveChangesAsync()
         {
             try
@@ -199,6 +211,21 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<User?> GetUserAsync(int userId) => await _userManager.FindByIdAsync(userId.ToString());
 
+        public async Task<Dictionary<int, UserNamesResponse>> GetNamesByIdsAsync(IEnumerable<int> userIds,
+            CancellationToken cancellationToken = default)
+        {
+            var ids = userIds.Distinct().ToList();
+            if (ids.Count == 0) return new Dictionary<int, UserNamesResponse>();
+
+            return await _context.Users.AsNoTracking()
+                .Where(user => ids.Contains(user.Id))
+                .Select(user => new UserNamesResponse
+                {
+                    Id = user.Id, FirstName = user.FirstName, LastName = user.LastName
+                })
+                .ToDictionaryAsync(user => user.Id, cancellationToken);
+        }
+
         public async Task<IdentityResult> UpdateUserAsync(User user) => await _userManager.UpdateAsync(user);
 
         public async Task<IdentityResult> ChangePasswordAsync(User user, string oldPassword, string newPassword)
@@ -212,6 +239,21 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             return await _context.UserDeviceTokens
                 .Where(d => d.UserId == userId)
                 .Select(d => d.DeviceToken)
+                .ToListAsync();
+        }
+
+        public async Task<List<string>> GetAdminDeviceTokensAsync()
+        {
+            var adminRoles = new[] { nameof(Role.HeadAdmin), nameof(Role.AdminOfficer) };
+
+            return await _context.UserDeviceTokens
+                .AsNoTracking()
+                .Where(token => _context.Users.Any(user => user.Id == token.UserId &&
+                    user.Status == AccountStatus.Active &&
+                    _context.UserRoles.Any(userRole => userRole.UserId == user.Id &&
+                        _context.Roles.Any(role => role.Id == userRole.RoleId && adminRoles.Contains(role.Name!)))))
+                .Select(token => token.DeviceToken)
+                .Distinct()
                 .ToListAsync();
         }
 

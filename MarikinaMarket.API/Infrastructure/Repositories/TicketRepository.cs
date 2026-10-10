@@ -42,6 +42,21 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .CountAsync(t => t.Type == type && t.IssuedAt >= start && t.IssuedAt <= end);
         }
 
+        public async Task<DashboardTicketCounts> GetDashboardTicketCountsAsync(DateTime startUtc, DateTime endUtc)
+        {
+            return await _context.Tickets
+                .AsNoTracking()
+                .GroupBy(_ => 1)
+                .Select(group => new DashboardTicketCounts
+                {
+                    InspectionsToday = group.Count(ticket => ticket.IssuedAt >= startUtc && ticket.IssuedAt < endUtc),
+                    OpenTickets = group.Count(ticket => ticket.Type == ViolationType.Ticket &&
+                        (ticket.Status == TicketStatus.Pending || ticket.Status == TicketStatus.Contested ||
+                         ticket.Status == TicketStatus.Overdue || ticket.Status == TicketStatus.InProgress))
+                })
+                .FirstOrDefaultAsync() ?? new DashboardTicketCounts();
+        }
+
         public async Task<Ticket?> GetTicketByIdAsync(int ticketId)
         {
             return await _context.Tickets
@@ -286,28 +301,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public async Task<List<AdminInspectionSummary>> GetAdminInspectionAsync(int offset, int limit, InspectionSummaryFilters filters)
         {
-            var query = _context.Tickets.AsQueryable();
-
-            if (filters.Type.HasValue)
-            {
-                query = query.Where(t => t.Type == filters.Type);
-            }
-
-            if (filters.MarketSectionId.HasValue)
-            {
-                query = query.Where(t => t.MarketSectionId == filters.MarketSectionId);
-            }
-
-            if (!string.IsNullOrEmpty(filters.Search))
-            {
-                var search = filters.Search.Trim();
-                query = query.Where(t =>
-                    t.ControlNumber!.Contains(search) ||
-                    t.Vendor!.User!.LastName.Contains(search) ||
-                    t.Vendor.User.FirstName.Contains(search) ||
-                    t.Vendor.BusinessName.Contains(search) ||
-                    t.Vendor.BusinessId.Contains(search));
-            }
+            var query = ApplyAdminInspectionFilters(_context.Tickets, filters);
 
             return await query
                 .OrderByDescending(t => t.IssuedAt)
@@ -330,6 +324,33 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     IssuedAt = t.IssuedAt
                 })
                 .ToListAsync();
+        }
+
+        public Task<int> GetAdminInspectionCountAsync(InspectionSummaryFilters filters)
+            => ApplyAdminInspectionFilters(_context.Tickets, filters).CountAsync();
+
+        private static IQueryable<Ticket> ApplyAdminInspectionFilters(
+            IQueryable<Ticket> query,
+            InspectionSummaryFilters filters)
+        {
+            if (filters.Type.HasValue)
+                query = query.Where(t => t.Type == filters.Type.Value);
+
+            if (filters.MarketSectionId.HasValue)
+                query = query.Where(t => t.MarketSectionId == filters.MarketSectionId.Value);
+
+            if (!string.IsNullOrWhiteSpace(filters.Search))
+            {
+                var search = filters.Search.Trim();
+                query = query.Where(t =>
+                    t.ControlNumber!.Contains(search) ||
+                    t.Vendor!.User!.LastName.Contains(search) ||
+                    t.Vendor.User.FirstName.Contains(search) ||
+                    t.Vendor.BusinessName.Contains(search) ||
+                    t.Vendor.BusinessId.Contains(search));
+            }
+
+            return query;
         }
 
         public async Task<List<AdminTicketSummary>> GetAdminTicketAsync(int offset, int limit, TicketSummaryFilters filters)
