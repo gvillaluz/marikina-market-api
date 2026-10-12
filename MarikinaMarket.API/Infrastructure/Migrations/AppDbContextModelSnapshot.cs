@@ -850,6 +850,77 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Report", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("DateGenerated")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_generated");
+
+                    b.Property<DateOnly>("From")
+                        .HasColumnType("date")
+                        .HasColumnName("from");
+
+                    b.Property<int>("GeneratedById")
+                        .HasColumnType("integer")
+                        .HasColumnName("generated_by_id");
+
+                    b.Property<string>("GeneratedByName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("generated_by_name");
+
+                    b.Property<decimal>("PendingTicketPenalties")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("pending_ticket_penalties");
+
+                    b.Property<int>("PendingTicketRecords")
+                        .HasColumnType("integer")
+                        .HasColumnName("pending_ticket_records");
+
+                    b.Property<decimal>("ResolvedTicketPenalties")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("resolved_ticket_penalties");
+
+                    b.Property<int>("ResolvedTicketRecords")
+                        .HasColumnType("integer")
+                        .HasColumnName("resolved_ticket_records");
+
+                    b.Property<DateOnly>("To")
+                        .HasColumnType("date")
+                        .HasColumnName("to");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("type");
+
+                    b.Property<int>("WarningRecords")
+                        .HasColumnType("integer")
+                        .HasColumnName("warning_records");
+
+                    b.HasKey("Id")
+                        .HasName("pk_reports");
+
+                    b.HasIndex("GeneratedById")
+                        .HasDatabaseName("ix_reports_generated_by_id");
+
+                    b.HasIndex("DateGenerated", "Id")
+                        .HasDatabaseName("ix_reports_date_generated_id");
+
+                    b.ToTable("reports", (string)null);
+                });
+
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Ticket", b =>
                 {
                     b.Property<int>("Id")
@@ -1770,6 +1841,16 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasConstraintName("fk_refresh_tokens_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Report", b =>
+                {
+                    b.HasOne("MarikinaMarket.API.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("GeneratedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_reports_asp_net_users_generated_by_id");
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Ticket", b =>

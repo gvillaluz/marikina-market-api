@@ -9,6 +9,9 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface IUserRepository
     {
+        Task DeleteDeviceTokenAsync(string deviceToken);
+        Task RevokeRefreshTokenAsync(string refreshToken);
+        Task DeleteOldTokensAsync(DateTime cutoff, CancellationToken cancellationToken = default);
         Task<AccountCountsResponse> GetAccountCountsAsync();
         Task<List<UserSummaryResponse>> GetUserSummariesAsync(int offset, int limit, UserSummaryFilter filters);
         Task<int> GetUserSummariesCountAsync(UserSummaryFilter filters);

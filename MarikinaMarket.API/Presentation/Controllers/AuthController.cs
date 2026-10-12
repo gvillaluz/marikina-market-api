@@ -18,6 +18,11 @@ namespace MarikinaMarket.API.Presentation.Controllers
         public AuthController(IAuthService service) => _service = service;
 
         [AllowAnonymous]
+        [HttpPost("logout")]
+        public async Task<ActionResult<LogoutResponse>> Logout([FromBody] LogoutRequest request)
+            => Ok(await _service.LogoutAsync(request));
+
+        [AllowAnonymous]
         [HttpPost("login")]
         public async Task<ActionResult<SendCodeResponse>> Login([FromBody] LoginRequest request)
         {

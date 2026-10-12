@@ -6,6 +6,8 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
 {
     public interface IAuthService
     {
+        Task<LogoutResponse> LogoutAsync(LogoutRequest request);
+        Task CleanupTokensAsync(CancellationToken cancellationToken = default);
         Task<SendCodeResponse> LoginAsync(LoginRequest request);
         Task<SendCodeResponse> LoginMobileAsync(LoginRequest request);
         Task<LoginResponse> VerifyLoginAsync(LoginVerificationRequest request);

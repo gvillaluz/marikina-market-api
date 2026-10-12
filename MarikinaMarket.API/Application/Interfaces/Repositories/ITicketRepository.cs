@@ -13,6 +13,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface ITicketRepository
     {
+        Task<List<TicketReportSummary>> GetReportSummaryAsync(DateTime startUtc, DateTime endUtc, ViolationType? type);
         Task<int> GetTotalTicketCountAsync(ViolationType? type);
         Task<int> GetTotalTicketCountForPeriodAsync(DateTime start, DateTime end, ViolationType type);
         Task<Ticket?> GetTicketByIdAsync(int ticketId);

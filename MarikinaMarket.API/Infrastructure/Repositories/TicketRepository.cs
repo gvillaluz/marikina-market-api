@@ -23,6 +23,31 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task<List<TicketReportSummary>> GetReportSummaryAsync(
+            DateTime startUtc, DateTime endUtc, ViolationType? type)
+        {
+            var query = _context.Tickets.AsNoTracking()
+                .Where(t => t.IssuedAt >= startUtc && t.IssuedAt < endUtc);
+            if (type.HasValue)
+                query = query.Where(t => t.Type == type.Value);
+
+            return await query.GroupBy(t => new
+                {
+                    t.Type,
+                    IsResolved = t.Type == ViolationType.Warning ||
+                        t.Status == TicketStatus.Paid || t.Status == TicketStatus.Cleared ||
+                        t.Status == TicketStatus.Waived
+                })
+                .Select(group => new TicketReportSummary
+                {
+                    Type = group.Key.Type,
+                    IsResolved = group.Key.IsResolved,
+                    TotalRecords = group.Count(),
+                    AssessedPenalties = group.Sum(t => t.Type == ViolationType.Warning
+                        ? 0m : t.TotalPaymentAmount ?? 0m)
+                }).ToListAsync();
+        }
+
         public async Task<int> GetTotalTicketCountAsync(ViolationType? type)
         {
             var query = _context.Tickets.AsQueryable();
@@ -396,7 +421,6 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     Status = t.Status ?? TicketStatus.Pending,
                     Severity = t.HighestSeverity ?? Severity.Minor,
                     PenaltyType = t.PenaltyType ?? PenaltyType.CashFine,
-                    TotalPaymentAmount = t.TotalPaymentAmount ?? 0,
                     IssuedAt = t.IssuedAt,
                     Version = t.Version,
                 })
@@ -482,6 +506,19 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     EnforcerFirstName = t.Enforcer!.FirstName,
                     EnforcerLastName = t.Enforcer.LastName,
                     TicketReceipts = t.ProofUrls ?? new List<string>(),
+                    ProofUrls = t.ProofUrls ?? new List<string>(),
+                    CommunityServiceHours = t.CommunityServiceHours,
+                    CommunityServiceLogs = t.CommunityServiceLogs
+                        .OrderBy(log => log.ServiceDate)
+                        .ThenBy(log => log.CreatedAt)
+                        .ThenBy(log => log.Id)
+                        .Select(log => new CommunityServiceLogResponse
+                        {
+                            ServiceDate = log.ServiceDate,
+                            HoursWorked = log.HoursWorked,
+                            ProofUrl = log.ProofUrl
+                        }).ToList(),
+                    HoursCompleted = t.CommunityServiceLogs.Sum(log => (decimal?)log.HoursWorked) ?? 0m,
                     Version = t.Version,
                 })
                 .FirstOrDefaultAsync();

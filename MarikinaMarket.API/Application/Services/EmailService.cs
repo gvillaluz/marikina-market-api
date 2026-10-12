@@ -42,7 +42,7 @@ namespace MarikinaMarket.API.Application.Services
                 var builder = new BodyBuilder
                 {
                     HtmlBody = body,
-                    TextBody = "Please view this email in an HTML-capable email client to see your verification code."
+                    TextBody = "You have received a message from Marikina City Public Market. Please view this email in an HTML-capable email client to read the full message."
                 };
                 message.Body = builder.ToMessageBody();
 

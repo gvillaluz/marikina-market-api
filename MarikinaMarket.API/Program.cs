@@ -68,6 +68,8 @@ builder.Services.AddScoped<AuditLogContext>();
 builder.Services.AddScoped<AuditLogActionFilter>();
 builder.Services.AddScoped<IVendorRepository, VendorRepository>();
 builder.Services.AddScoped<ITicketRepository, TicketRepository>();
+builder.Services.AddScoped<IReportRepository, ReportRepository>();
+builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IOrdinanceRepository, OrdinanceRepository>();
 builder.Services.AddScoped<IMarketSectionRepository, MarketSectionRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -96,6 +98,7 @@ builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddHostedService<AutomaticBackupService>();
 builder.Services.AddHostedService<OverdueTicketCheckerService>();
+builder.Services.AddHostedService<TokenCleanupService>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -124,6 +127,15 @@ builder.Services.AddAuthentication(options =>
 
     options.Events = new JwtBearerEvents
     {
+        OnMessageReceived = context =>
+        {
+            var action = context.HttpContext.GetEndpoint()?.Metadata
+                .GetMetadata<Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor>();
+            if (action?.ControllerTypeInfo.AsType() == typeof(MarikinaMarket.API.Presentation.Controllers.AuthController)
+                && action.ActionName == nameof(MarikinaMarket.API.Presentation.Controllers.AuthController.Logout))
+                context.NoResult();
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             var userIdValue = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;

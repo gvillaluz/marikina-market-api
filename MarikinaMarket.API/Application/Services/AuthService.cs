@@ -41,6 +41,45 @@ namespace MarikinaMarket.API.Application.Services
             _auditService = auditService;
         }
 
+        public async Task<LogoutResponse> LogoutAsync(LogoutRequest request)
+        {
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+            // Optional refresh tokens must be omitted or null, rather than empty.
+            if (request.RefreshToken is not null && string.IsNullOrWhiteSpace(request.RefreshToken))
+                throw new ValidationException("Refresh token must not be blank.");
+
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                await _repository.DeleteDeviceTokenAsync(request.DeviceToken);
+                if (request.RefreshToken is not null)
+                    await _repository.RevokeRefreshTokenAsync(request.RefreshToken);
+                await _unitOfWork.CommitAsync();
+                return new LogoutResponse();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task CleanupTokensAsync(CancellationToken cancellationToken = default)
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-REQUIRE_LOGIN_AFTER_DAYS);
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                await _repository.DeleteOldTokensAsync(cutoff, cancellationToken);
+                await _unitOfWork.CommitAsync();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
+        }
+
         public async Task<SendCodeResponse> LoginAsync(LoginRequest request)
         {
             Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);

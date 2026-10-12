@@ -27,6 +27,26 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task DeleteDeviceTokenAsync(string deviceToken)
+        {
+            await _context.UserDeviceTokens.Where(t => t.DeviceToken == deviceToken)
+                .ExecuteDeleteAsync();
+        }
+
+        public async Task RevokeRefreshTokenAsync(string refreshToken)
+        {
+            await _context.RefreshTokens.Where(t => t.Token == refreshToken && !t.IsRevoked)
+                .ExecuteUpdateAsync(update => update.SetProperty(t => t.IsRevoked, true));
+        }
+
+        public async Task DeleteOldTokensAsync(DateTime cutoff, CancellationToken cancellationToken = default)
+        {
+            await _context.UserDeviceTokens.Where(t => t.CreatedAt <= cutoff)
+                .ExecuteDeleteAsync(cancellationToken);
+            await _context.RefreshTokens.Where(t => t.CreatedAt <= cutoff)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
         public async Task<AccountCountsResponse> GetAccountCountsAsync()
         {
             var users = _context.Users.AsNoTracking();

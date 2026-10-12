@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MarikinaMarket.API.Application.DTOs.Ordinance.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Internal;
 using MarikinaMarket.API.Application.DTOs.Tickets.Request;
@@ -399,16 +400,28 @@ namespace MarikinaMarket.API.Application.Services
                     if (!string.IsNullOrEmpty(vendor.Email))
                     {
                         string subject = $"Notice of Issued Warning";
-                        string body = $"Dear {vendor.FirstName} {vendor.LastName},\n\n" +
-                            $"This is to inform you that a warning ticket has been issued for your stall, {vendor.BusinessName}.\n\n" +
-                            $"Reason for Warning:\n{newWarningTicket.Description}\n\n" +
-                            $"Date Issued: {newWarningTicket.IssuedAt:MMMM dd, yyyy - hh:mm tt} UTC\n\n" +
-                            $"This warning serves as an official notice. Please address the issue(s) mentioned above promptly. " +
-                            $"Failure to resolve them may result in a formal citation and corresponding fines.\n\n" +
-                            $"If you believe this warning was issued in error, you may contact the market administration office to file a dispute.\n\n" +
-                            $"Thank you for your cooperation.\n\n" +
-                            $"Sincerely,\n" +
-                            $"Market Administration Office";
+                        var description = WebUtility.HtmlEncode(newWarningTicket.Description)
+                            .Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "<br>");
+                        string body = $@"
+                            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
+                                <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
+                                <p style=""color: #666; margin-top: 0;"">Notice of Issued Warning</p>
+                                <p>Dear {WebUtility.HtmlEncode(vendor.FirstName)} {WebUtility.HtmlEncode(vendor.LastName)},</p>
+                                <p>A warning has been issued for your stall, <strong>{WebUtility.HtmlEncode(vendor.BusinessName)}</strong>.</p>
+                                <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                                    <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
+                                        <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(newWarningTicket.ControlNumber)}</td></tr>
+                                        <tr><td style=""padding: 4px 0; color: #666;"">Date Issued</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{newWarningTicket.IssuedAt:MMMM dd, yyyy - hh:mm tt} UTC</td></tr>
+                                    </table>
+                                    <p style=""margin-bottom: 4px; font-weight: bold;"">Reason for Warning</p>
+                                    <p style=""margin-top: 0;"">{description}</p>
+                                </div>
+                                <p>Please address the issues described above promptly. Unresolved issues may lead to a formal citation and corresponding penalties.</p>
+                                <p>If you believe this warning was issued in error, contact the market administration office to file a dispute.</p>
+                                <p>Thank you for your cooperation.</p>
+                                <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
+                                <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
+                            </div>";
 
                         await _notificationService.SendEmailAsync(vendor.Email, subject, body);
                     }
@@ -510,27 +523,27 @@ namespace MarikinaMarket.API.Application.Services
 
                     string subject = $"Notice of Violation Ticket - Control No. {newTicket.ControlNumber}";
                     string body = $@"
-                        <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
-                            <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
+                        <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
+                            <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
                             <p style=""color: #666; margin-top: 0;"">Notice of Violation Ticket</p>
 
                             <p>Dear {firstName} {lastName},</p>
-                            <p>This is to inform you that a violation ticket has been issued for your stall, {businessName}.</p>
+                            <p>A violation ticket has been issued for your stall, <strong>{businessName}</strong>. Please review the details below.</p>
 
                             <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
                                 <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
-                                    <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{newTicket.ControlNumber}</td></tr>
-                                    <tr><td style=""padding: 4px 0; color: #666;"">Total Penalty</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">PHP {newTicket.TotalPaymentAmount:N2}</td></tr>
+                                    <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(newTicket.ControlNumber)}</td></tr>
+                                    {BuildPenaltyEmailRows(newTicket)}
                                     <tr><td style=""padding: 4px 0; color: #666;"">Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{newTicket.IssuedAt.AddDays(15):MMMM dd, yyyy}</td></tr>
                                 </table>
                             </div>
 
-                            <p>Please settle the amount above on or before the due date to avoid further administrative action, including additional penalties or suspension of your stall permit.</p>
+                            <p>Please complete the required settlement on or before the due date. Submit your receipt or donation proof, or ensure your community service hours are recorded, as applicable.</p>
                             <p>If you wish to contest this ticket, please visit the market administration office within 15 days of the issue date to file an appeal.</p>
                             <p>Thank you for your prompt attention to this matter.</p>
 
                             <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
-                            <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
+                            <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
                         </div>";
 
                     await _notificationService.SendEmailAsync(vendor.Email, subject, body);
@@ -766,6 +779,10 @@ namespace MarikinaMarket.API.Application.Services
 
         public async Task<UpdateStatusResponse> UpdateTicketStatusAsync(int ticketId, UpdateStatusRequest request)
         {
+            if (ticketId <= 0)
+                throw new InvalidRequestException("Ticket identification is invalid.");
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+
             Ticket ticket;
             TicketStatus? previousStatus;
             await _unitOfWork.BeginTransactionAsync();
@@ -773,6 +790,7 @@ namespace MarikinaMarket.API.Application.Services
             {
                 ticket = await _ticketRepository.GetTicketByIdAsync(ticketId)
                     ?? throw new RecordNotFoundException("Ticket not found.");
+                ValidateTicketSettlement(ticket, request.NewStatus);
                 previousStatus = ticket.Status;
 
                 _ticketRepository.SetOriginalVersion(ticket, request.Version);
@@ -811,27 +829,27 @@ namespace MarikinaMarket.API.Application.Services
 
                 string subject = $"Ticket Status Update - Control No. {ticket.ControlNumber}";
                 string body = $@"
-            <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
-                <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
+            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
+                <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
                 <p style=""color: #666; margin-top: 0;"">Ticket Status Update</p>
 
                 <p>Dear {firstName} {lastName},</p>
-                <p>This is to inform you that the status of your ticket has been updated.</p>
+                <p>Your ticket status has changed from <strong>{previousStatus}</strong> to <strong>{ticket.Status}</strong>.</p>
 
                 <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
                     <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
-                        <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.ControlNumber}</td></tr>
+                        <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(ticket.ControlNumber)}</td></tr>
                         <tr><td style=""padding: 4px 0; color: #666;"">Previous Status</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{previousStatus}</td></tr>
                         <tr><td style=""padding: 4px 0; color: #666;"">Current Status</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.Status}</td></tr>
                         <tr><td style=""padding: 4px 0; color: #666;"">Updated At</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.UpdatedAt:MMMM dd, yyyy - hh:mm tt} UTC</td></tr>
                     </table>
                 </div>
 
-                <p>Please review your ticket details for further information. If you have any questions or concerns regarding this update, please visit the market administration office.</p>
+                <p>Please review your ticket details for any remaining requirements. If you have questions about this update, contact the market administration office and provide the control number above.</p>
                 <p>Thank you for your attention to this matter.</p>
 
                 <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
-                <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
+                <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
             </div>";
 
                 await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
@@ -851,6 +869,33 @@ namespace MarikinaMarket.API.Application.Services
                 UpdatedAt = ticket.UpdatedAt,
                 Version = ticket.Version
             };
+        }
+
+        private static void ValidateTicketSettlement(Ticket ticket, TicketStatus newStatus)
+        {
+            if (newStatus is not (TicketStatus.Paid or TicketStatus.Cleared))
+                return;
+
+            if (ticket.Type != ViolationType.Ticket)
+                throw new InvalidRequestException("Only violation tickets with completed settlement can be marked Paid or Cleared.");
+
+            if (ticket.PenaltyType is PenaltyType.CashFine or PenaltyType.BloodDonation)
+            {
+                if (ticket.ProofUrls?.Any(proof => !string.IsNullOrWhiteSpace(proof)) != true)
+                    throw new InvalidRequestException("Settlement proof is required before marking this ticket Paid or Cleared.");
+                return;
+            }
+
+            if (ticket.PenaltyType == PenaltyType.CommunityService)
+            {
+                if (!ticket.CommunityServiceHours.HasValue || ticket.CommunityServiceHours.Value <= 0)
+                    throw new InvalidRequestException("Required community service hours must be set before marking this ticket Paid or Cleared.");
+                if (ticket.CommunityServiceLogs.Sum(log => log.HoursWorked) < ticket.CommunityServiceHours.Value)
+                    throw new InvalidRequestException("Community service must be completed before marking this ticket Paid or Cleared.");
+                return;
+            }
+
+            throw new InvalidRequestException("A supported settlement penalty is required before marking this ticket Paid or Cleared.");
         }
 
         public async Task<PageResponse<AdminInspectionSummaryResponse>> GetAdminInspectionAsync(int offset, InspectionSummaryFilters filters)
@@ -924,7 +969,6 @@ namespace MarikinaMarket.API.Application.Services
                 Status = t.Status,
                 Severity = t.Severity,
                 PenaltyType = t.PenaltyType,
-                TotalPaymentAmount = t.TotalPaymentAmount,
                 IssuedAt = t.IssuedAt
             }).ToList();
 
@@ -967,26 +1011,28 @@ namespace MarikinaMarket.API.Application.Services
 
         public async Task<AdminTicketDetailResponse> GetAdminTicketDetailAsync(int ticketId)
         {
+            if (ticketId <= 0)
+                throw new InvalidRequestException("Ticket identification is invalid.");
+
             var ticket = await _ticketRepository.GetAdminTicketDetailAsync(ticketId);
 
             if (ticket is null) throw new RecordNotFoundException("Ticket not found");
 
-            if (ticket.TicketEvidences!.Any())
-            {
-                Dictionary<string, string> keysWithUrls = await _storageService.GetPresignedUrlsAsync(
-                    B2BucketType.Evidence,
-                    ticket.TicketEvidences!
-                );
+            var evidenceKeys = (ticket.TicketEvidences ?? [])
+                .Where(key => !string.IsNullOrWhiteSpace(key)).ToList();
+            var proofKeys = ticket.ProofUrls.Where(key => !string.IsNullOrWhiteSpace(key)).ToList();
+            var keys = evidenceKeys.Concat(proofKeys)
+                .Concat(ticket.CommunityServiceLogs.Select(log => log.ProofUrl))
+                .Where(key => !string.IsNullOrWhiteSpace(key)).Distinct().ToList();
 
-                var presignedUrls = new List<string>();
-
-                foreach (var key in ticket.TicketEvidences!)
-                {
-                    presignedUrls.Add(keysWithUrls[key]);
-                }
-
-                ticket.TicketEvidences = presignedUrls;
-            }
+            var urls = keys.Count > 0
+                ? await _storageService.GetPresignedUrlsAsync(B2BucketType.Evidence, keys)
+                : new Dictionary<string, string>();
+            ticket.TicketEvidences = evidenceKeys.Select(key => urls[key]).ToList();
+            ticket.ProofUrls = proofKeys.Select(key => urls[key]).ToList();
+            foreach (var log in ticket.CommunityServiceLogs)
+                log.ProofUrl = string.IsNullOrWhiteSpace(log.ProofUrl) ? "" : urls[log.ProofUrl];
+            ticket.TicketReceipts = ticket.ProofUrls;
 
             return ticket;
         }
@@ -1054,27 +1100,27 @@ namespace MarikinaMarket.API.Application.Services
 
                     string subject = $"Overdue Notice - Control No. {ticket.ControlNumber}";
                     string body = $@"
-                <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
-                    <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
+                <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
+                    <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
                     <p style=""color: #666; margin-top: 0;"">Overdue Notice</p>
 
                     <p>Dear {firstName} {lastName},</p>
-                    <p>This is to inform you that your ticket has now become overdue.</p>
+                    <p>Your ticket is now <strong>overdue</strong>. Please review the outstanding settlement details below.</p>
 
                     <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
                         <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
-                            <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.ControlNumber}</td></tr>
-                            <tr><td style=""padding: 4px 0; color: #666;"">Total Penalty</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">PHP {ticket.TotalPaymentAmount:N2}</td></tr>
+                            <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(ticket.ControlNumber)}</td></tr>
+                            {BuildPenaltyEmailRows(ticket)}
                             <tr><td style=""padding: 4px 0; color: #666;"">Original Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.IssuedAt.AddDays(5):MMMM dd, yyyy}</td></tr>
                         </table>
                     </div>
 
-                    <p>Please settle your outstanding balance as soon as possible to avoid further administrative action, including additional penalties or suspension of your stall permit.</p>
+                    <p>Please complete your required settlement as soon as possible. Submit your receipt or donation proof, or complete and record your remaining community service hours, as applicable.</p>
                     <p>If you wish to contest this ticket, please visit the market administration office to file an appeal.</p>
                     <p>Thank you for your prompt attention to this matter.</p>
 
                     <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
-                    <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
+                    <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
                 </div>";
 
                     await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
@@ -1082,6 +1128,23 @@ namespace MarikinaMarket.API.Application.Services
             }
 
             return newlyOverdueTickets.Count;
+        }
+
+        private static string BuildPenaltyEmailRows(Ticket ticket)
+        {
+            var penalty = ticket.PenaltyType switch
+            {
+                PenaltyType.CashFine => "Cash fine",
+                PenaltyType.BloodDonation => "Blood donation",
+                PenaltyType.CommunityService => "Community service",
+                _ => "Contact the market administration office"
+            };
+            var rows = $@"<tr><td style=""padding: 4px 0; color: #666;"">Penalty Type</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{penalty}</td></tr>";
+            if (ticket.PenaltyType == PenaltyType.CashFine)
+                rows += $@"<tr><td style=""padding: 4px 0; color: #666;"">Total Penalty</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">PHP {ticket.TotalPaymentAmount:N2}</td></tr>";
+            if (ticket.PenaltyType == PenaltyType.CommunityService)
+                rows += $@"<tr><td style=""padding: 4px 0; color: #666;"">Required Hours</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{ticket.CommunityServiceHours}</td></tr>";
+            return rows;
         }
 
         private static double? CalculatePercentChange(int previous, int current)
