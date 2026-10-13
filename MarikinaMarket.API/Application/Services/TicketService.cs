@@ -67,9 +67,6 @@ namespace MarikinaMarket.API.Application.Services
         {
             var ticket = await GetTicketForSettlementAsync(ticketId, enforcerId);
 
-            if (ticket.PenaltyType is not (PenaltyType.CashFine or PenaltyType.BloodDonation))
-                throw new InvalidRequestException("Receipt proof is only available for cash fine or blood donation tickets.");
-
             return await BuildTicketReceiptProofResponseAsync(ticket);
         }
 
@@ -77,10 +74,26 @@ namespace MarikinaMarket.API.Application.Services
         {
             var ticket = await GetTicketForSettlementAsync(ticketId, enforcerId);
 
-            if (ticket.PenaltyType != PenaltyType.CommunityService)
-                throw new InvalidRequestException("Community service logs are only available for community service tickets.");
-
             return await BuildCommunityServiceProgressAsync(ticket);
+        }
+
+        public async Task<TicketReceiptProofResponse> GetVendorTicketReceiptProofAsync(int ticketId, int userId)
+        {
+            var ticket = await GetVendorTicketForSettlementAsync(ticketId, userId);
+            return await BuildTicketReceiptProofResponseAsync(ticket);
+        }
+
+        public async Task<CommunityServiceProgressResponse> GetVendorCommunityServiceProgressAsync(int ticketId, int userId)
+        {
+            var ticket = await GetVendorTicketForSettlementAsync(ticketId, userId);
+            return await BuildCommunityServiceProgressAsync(ticket);
+        }
+
+        public async Task<TicketReceiptProofResponse> SubmitVendorTicketReceiptProofAsync(
+            int ticketId, int userId, SubmitTicketReceiptProofRequest request)
+        {
+            var ticket = await GetVendorTicketForSettlementAsync(ticketId, userId);
+            return await SaveTicketReceiptProofAsync(ticket, request);
         }
 
         public async Task<TicketReceiptProofResponse> SubmitTicketReceiptProofAsync(
@@ -89,6 +102,15 @@ namespace MarikinaMarket.API.Application.Services
             SubmitTicketReceiptProofRequest request)
         {
             var ticket = await GetTicketForSettlementAsync(ticketId, enforcerId);
+
+            return await SaveTicketReceiptProofAsync(ticket, request);
+        }
+
+        private async Task<TicketReceiptProofResponse> SaveTicketReceiptProofAsync(
+            Ticket ticket, SubmitTicketReceiptProofRequest request)
+        {
+            if (request is null)
+                throw new InvalidRequestException("A settlement proof file is required.");
 
             if (ticket.PenaltyType is not (PenaltyType.CashFine or PenaltyType.BloodDonation))
                 throw new InvalidRequestException("Receipt proof is only accepted for cash fine or blood donation tickets.");
@@ -150,6 +172,9 @@ namespace MarikinaMarket.API.Application.Services
 
         private async Task<TicketReceiptProofResponse> BuildTicketReceiptProofResponseAsync(Ticket ticket)
         {
+            if (ticket.PenaltyType is not (PenaltyType.CashFine or PenaltyType.BloodDonation))
+                throw new InvalidRequestException("Receipt proof is only available for cash fine or blood donation tickets.");
+
             var proofKeys = ticket.ProofUrls ?? [];
             var proofUrls = await _storageService.GetPresignedUrlsAsync(B2BucketType.Evidence, proofKeys);
 
@@ -163,6 +188,9 @@ namespace MarikinaMarket.API.Application.Services
 
         private async Task<CommunityServiceProgressResponse> BuildCommunityServiceProgressAsync(Ticket ticket)
         {
+            if (ticket.PenaltyType != PenaltyType.CommunityService)
+                throw new InvalidRequestException("Community service logs are only available for community service tickets.");
+
             if (!ticket.CommunityServiceHours.HasValue || ticket.CommunityServiceHours.Value <= 0)
                 throw new InvalidRequestException("The ticket does not have a valid community service hour requirement.");
 
@@ -222,13 +250,30 @@ namespace MarikinaMarket.API.Application.Services
             if (ticket.EnforcerId != enforcerId)
                 throw new UnauthorizedAccessException("You can only submit settlement proof for tickets assigned to you.");
 
+            ValidateSettlementTicket(ticket);
+            return ticket;
+        }
+
+        private async Task<Ticket> GetVendorTicketForSettlementAsync(int ticketId, int userId)
+        {
+            if (ticketId <= 0)
+                throw new InvalidRequestException("Ticket identification must be greater than zero.");
+            if (userId <= 0)
+                throw new InvalidRequestException("User ID must be greater than zero.");
+
+            var ticket = await _ticketRepository.GetVendorTicketByIdAsync(ticketId, userId)
+                ?? throw new RecordNotFoundException("Ticket not found.");
+            ValidateSettlementTicket(ticket);
+            return ticket;
+        }
+
+        private static void ValidateSettlementTicket(Ticket ticket)
+        {
             if (ticket.Type != ViolationType.Ticket)
                 throw new InvalidRequestException("Settlement proof can only be submitted for violation tickets.");
 
             if (!ticket.PenaltyType.HasValue)
                 throw new InvalidRequestException("The ticket does not have a penalty type.");
-
-            return ticket;
         }
 
         private async Task<string> UploadSettlementProofAsync(IFormFile? file)
@@ -580,6 +625,47 @@ namespace MarikinaMarket.API.Application.Services
             }
         }
 
+        public async Task<PageResponse<VendorInspectionSummaryResponse>> GetVendorInspectionsAsync(
+            int userId, int offset, VendorInspectionFilters filters)
+        {
+            if (userId <= 0)
+                throw new InvalidRequestException("User ID must be greater than zero.");
+            if (offset < 0)
+                throw new InvalidRequestException("Offset must not be negative.");
+            if (filters is null)
+                throw new InvalidRequestException("Inspection filters are required.");
+            if (filters.Search?.Length > 200)
+                throw new InvalidRequestException("Search term must be 200 characters or fewer.");
+            if (filters.Type.HasValue && !Enum.IsDefined(filters.Type.Value))
+                throw new InvalidRequestException("Invalid violation type.");
+
+            var inspections = await _ticketRepository.GetVendorInspectionsAsync(userId, offset, PAGE_SIZE, filters);
+            var total = await _ticketRepository.GetVendorInspectionCountAsync(userId, filters);
+            var hasMore = inspections.Count > PAGE_SIZE;
+            if (hasMore)
+                inspections.RemoveAt(inspections.Count - 1);
+
+            var response = inspections.Select(inspection => new VendorInspectionSummaryResponse
+            {
+                TicketId = inspection.Id,
+                ControlNumber = inspection.ControlNumber,
+                Type = inspection.Type,
+                Violations = inspection.Ordinances.Select(ordinance => ordinance.Title).ToList(),
+                IssuedAt = inspection.IssuedAt,
+                OverdueDate = inspection.Type == ViolationType.Ticket
+                    ? inspection.IssuedAt.AddDays(5)
+                    : null,
+                TicketStatus = inspection.Status
+            }).ToList();
+
+            return new PageResponse<VendorInspectionSummaryResponse>
+            {
+                Items = response,
+                HasMore = hasMore,
+                Total = total
+            };
+        }
+
         public async Task<PageResponse<InspectionSummaryResponse>> GetInspectionsByEnforcerIdAsync(int enforcerId, int offset, ViolationType type, string search)
         {
             offset = Math.Max(offset, 0);
@@ -757,6 +843,24 @@ namespace MarikinaMarket.API.Application.Services
             if (ticketDetail is null)
                 throw new RecordNotFoundException("Ticket not found.");
 
+            return await PopulateTicketEvidenceUrlsAsync(ticketDetail);
+        }
+
+        public async Task<TicketDetailResponse> GetVendorTicketDetailAsync(int ticketId, int userId)
+        {
+            if (ticketId <= 0)
+                throw new InvalidRequestException("Ticket identification must be greater than zero.");
+            if (userId <= 0)
+                throw new InvalidRequestException("User ID must be greater than zero.");
+
+            var ticketDetail = await _ticketRepository.GetVendorTicketDetailAsync(ticketId, userId)
+                ?? throw new RecordNotFoundException("Ticket not found.");
+
+            return await PopulateTicketEvidenceUrlsAsync(ticketDetail);
+        }
+
+        private async Task<TicketDetailResponse> PopulateTicketEvidenceUrlsAsync(TicketDetailResponse ticketDetail)
+        {
             if (ticketDetail.TicketEvidences!.Any())
             {
                 Dictionary<string, string> keysWithUrls = await _storageService.GetPresignedUrlsAsync(

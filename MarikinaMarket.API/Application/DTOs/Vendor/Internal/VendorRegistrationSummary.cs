@@ -5,6 +5,7 @@ namespace MarikinaMarket.API.Application.DTOs.Vendor.Internal
     public class VendorRegistrationSummary
     {
         public int RegistrationId { get; set; }
+        public uint Version { get; set; }
         public required string BusinessId { get; set; }
         public required string BusinessName { get; set; }
         public required string VendorName { get; set; }

@@ -13,15 +13,20 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface ITicketRepository
     {
+        Task<List<VendorInspectionSummary>> GetVendorInspectionsAsync(
+            int userId, int offset, int limit, VendorInspectionFilters filters);
+        Task<int> GetVendorInspectionCountAsync(int userId, VendorInspectionFilters filters);
         Task<List<TicketReportSummary>> GetReportSummaryAsync(DateTime startUtc, DateTime endUtc, ViolationType? type);
         Task<int> GetTotalTicketCountAsync(ViolationType? type);
         Task<int> GetTotalTicketCountForPeriodAsync(DateTime start, DateTime end, ViolationType type);
         Task<Ticket?> GetTicketByIdAsync(int ticketId);
+        Task<Ticket?> GetVendorTicketByIdAsync(int ticketId, int userId);
         Task<List<VendorComplianceTicket>> GetVendorComplianceTicketsAsync(
             IReadOnlyCollection<int> vendorIds, DateTime windowStart, DateTime calculatedAt);
         Task<DashboardTicketCount> GetTicketCountAsync(int enforcerId);
         Task<List<DailyTicketCount>> GetTicketsWithDateAsync(DateTime startOfThisMonth);
         Task<TicketDetailResponse?> GetTicketDetailAsync(int ticketId);
+        Task<TicketDetailResponse?> GetVendorTicketDetailAsync(int ticketId, int userId);
         Task<int> GetNewControlNumber();
         Task<List<WarningOrdinance>> GetWarningOrdinancesForVendor(int vendorId, List<int> ordinanceIds);
         Task<List<DuplicateOrdinance>> GetDuplicatedTickets(int vendorId, List<int> ordinanceIds);

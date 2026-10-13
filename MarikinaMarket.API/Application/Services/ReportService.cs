@@ -147,25 +147,36 @@ namespace MarikinaMarket.API.Application.Services
 
         private static ReportStatisticsResponse Statistics(Report report)
         {
-            var warnings = Breakdown(report.WarningRecords, 0, 0m, 0m);
-            var tickets = Breakdown(report.ResolvedTicketRecords, report.PendingTicketRecords,
-                report.ResolvedTicketPenalties, report.PendingTicketPenalties);
-            var combined = Breakdown(report.WarningRecords + report.ResolvedTicketRecords,
-                report.PendingTicketRecords, report.ResolvedTicketPenalties, report.PendingTicketPenalties);
+            var ticketRecords = report.ResolvedTicketRecords + report.PendingTicketRecords;
+            var ticketPenalties = report.ResolvedTicketPenalties + report.PendingTicketPenalties;
             return new ReportStatisticsResponse
             {
-                Total = combined.Total, Resolved = combined.Resolved, Pending = combined.Pending,
-                WarningsIssued = report.Type == "Ticket" ? null : warnings,
-                TicketsIssued = report.Type == "Warning" ? null : tickets
+                Total = new ReportRecordGroupResponse
+                {
+                    TotalRecords = report.WarningRecords + ticketRecords,
+                    AssessedPenalties = ticketPenalties
+                },
+                Resolved = new ReportRecordGroupResponse
+                {
+                    TotalRecords = report.ResolvedTicketRecords,
+                    AssessedPenalties = report.ResolvedTicketPenalties
+                },
+                Pending = new ReportRecordGroupResponse
+                {
+                    TotalRecords = report.PendingTicketRecords,
+                    AssessedPenalties = report.PendingTicketPenalties
+                },
+                WarningsIssued = report.Type == "Ticket" ? null : new ReportRecordGroupResponse
+                {
+                    TotalRecords = report.WarningRecords,
+                    AssessedPenalties = 0m
+                },
+                TicketsIssued = report.Type == "Warning" ? null : new ReportRecordGroupResponse
+                {
+                    TotalRecords = ticketRecords,
+                    AssessedPenalties = ticketPenalties
+                }
             };
         }
-
-        private static ReportStatusBreakdownResponse Breakdown(int resolved, int pending,
-            decimal resolvedPenalties, decimal pendingPenalties) => new()
-        {
-            Total = new ReportRecordGroupResponse { TotalRecords = resolved + pending, AssessedPenalties = resolvedPenalties + pendingPenalties },
-            Resolved = new ReportRecordGroupResponse { TotalRecords = resolved, AssessedPenalties = resolvedPenalties },
-            Pending = new ReportRecordGroupResponse { TotalRecords = pending, AssessedPenalties = pendingPenalties }
-        };
     }
 }

@@ -285,10 +285,10 @@ namespace MarikinaMarket.API.Application.Services
                 if (registration is null)
                     throw new RecordNotFoundException("Registration request record not found.");
 
+                ValidateReviewVersion(registration, request.Version);
+
                 if (registration.Status != RequestStatus.Pending)
                     throw new AlreadyProcessedException("This request has already been processed.");
-
-                _vendorRepository.SetOriginalVersion(registration, request.Version);
 
                 registration.Status = request.RequestStatus;
                 registration.ReviewedAt = DateTime.UtcNow;
@@ -408,6 +408,8 @@ namespace MarikinaMarket.API.Application.Services
                 if (registration is null)
                     throw new RecordNotFoundException("Registration request record not found.");
 
+                ValidateReviewVersion(registration, request.Version);
+
                 if (registration.Status != RequestStatus.Pending)
                     throw new AlreadyProcessedException("This request has already been processed.");
 
@@ -416,8 +418,6 @@ namespace MarikinaMarket.API.Application.Services
 
                 if (string.IsNullOrWhiteSpace(request.ReviewRemarks))
                     throw new InvalidRequestException("Review remarks are required when declining a registration.");
-
-                _vendorRepository.SetOriginalVersion(registration, request.Version);
 
                 registration.Status = request.RequestStatus;
                 registration.ReviewedAt = DateTime.UtcNow;
@@ -492,6 +492,8 @@ namespace MarikinaMarket.API.Application.Services
                 if (registration is null)
                     throw new RecordNotFoundException("Registration request record not found.");
 
+                ValidateReviewVersion(registration, request.Version);
+
                 if (registration.Status != RequestStatus.Pending)
                     throw new AlreadyProcessedException("This request has already been processed.");
 
@@ -500,8 +502,6 @@ namespace MarikinaMarket.API.Application.Services
 
                 if (string.IsNullOrWhiteSpace(request.ReviewRemarks))
                     throw new InvalidRequestException("Review remarks are required when requesting information.");
-
-                _vendorRepository.SetOriginalVersion(registration, request.Version);
 
                 registration.Status = request.RequestStatus;
                 registration.ReviewedAt = DateTime.UtcNow;
@@ -556,6 +556,17 @@ namespace MarikinaMarket.API.Application.Services
                     await _unitOfWork.RollbackAsync();
                 throw;
             }
+        }
+
+        private void ValidateReviewVersion(VendorRegistrationRequest registration, uint version)
+        {
+            if (version == 0)
+                throw new InvalidRequestException("A valid registration version is required.");
+
+            if (registration.Version != version)
+                throw new ConcurrencyConflictException("This registration was already reviewed by another admin. Please refresh and try again.");
+
+            _vendorRepository.SetOriginalVersion(registration, version);
         }
 
         private async Task<bool> SendReviewEmailAsync(
@@ -745,7 +756,8 @@ namespace MarikinaMarket.API.Application.Services
                     MarketSectionName = request.MarketSectionName,
                     StallNumber = request.StallNumber,
                     RequestedAt = request.RequestedAt,
-                    Status = request.Status
+                    Status = request.Status,
+                    Version = request.Version
                 }).ToList(),
                 HasMore = offset + requests.Count < total,
                 Total = total
@@ -760,6 +772,7 @@ namespace MarikinaMarket.API.Application.Services
             return new VendorRegistrationDetailsResponse
             {
                 RegistrationId = registration.Id,
+                Version = registration.Version,
                 BusinessId = registration.BusinessId,
                 BusinessName = registration.BusinessName,
                 NatureOfBusiness = registration.NatureOfBusiness,

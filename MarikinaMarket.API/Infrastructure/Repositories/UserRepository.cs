@@ -1,4 +1,5 @@
-﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
+using Npgsql;
+using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.User.Response;
@@ -134,7 +135,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             {
                 return await _userManager.CreateAsync(user);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception ex) when (ex is DbUpdateConcurrencyException
+                or PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } })
             {
                 throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
             }
@@ -161,7 +164,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             {
                 return await _userManager.AddToRoleAsync(user, role);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception ex) when (ex is DbUpdateConcurrencyException
+                or PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } })
             {
                 throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
             }

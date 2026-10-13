@@ -27,13 +27,14 @@ public class ReportTests
         Assert.Null(fixture.Tickets.Type);
         Assert.Equal(7, result.Summary.Total.TotalRecords);
         Assert.Equal(1200m, result.Summary.Total.AssessedPenalties);
-        Assert.Equal(5, result.Summary.Resolved.TotalRecords);
+        Assert.Equal(2, result.Summary.Resolved.TotalRecords);
         Assert.Equal(700m, result.Summary.Resolved.AssessedPenalties);
         Assert.Equal(2, result.Summary.Pending.TotalRecords);
         Assert.Equal(500m, result.Summary.Pending.AssessedPenalties);
-        Assert.Equal(3, result.Summary.WarningsIssued!.Resolved.TotalRecords);
-        Assert.Equal(0m, result.Summary.WarningsIssued.Total.AssessedPenalties);
-        Assert.Equal(4, result.Summary.TicketsIssued!.Total.TotalRecords);
+        Assert.Equal(3, result.Summary.WarningsIssued!.TotalRecords);
+        Assert.Equal(0m, result.Summary.WarningsIssued.AssessedPenalties);
+        Assert.Equal(4, result.Summary.TicketsIssued!.TotalRecords);
+        Assert.Equal(1200m, result.Summary.TicketsIssued.AssessedPenalties);
         Assert.Empty(fixture.Reports.Items);
         Assert.Equal(0, fixture.Unit.Begins);
     }
@@ -50,6 +51,10 @@ public class ReportTests
         Assert.Equal(type == "Warning" ? ViolationType.Warning : ViolationType.Ticket, fixture.Tickets.Type);
         Assert.Equal(type == "Warning", result.Summary.WarningsIssued is not null);
         Assert.Equal(type == "Ticket", result.Summary.TicketsIssued is not null);
+        Assert.Equal(type == "Warning" ? 0 : 2, result.Summary.Resolved.TotalRecords);
+        Assert.Equal(type == "Warning" ? 0m : 700m, result.Summary.Resolved.AssessedPenalties);
+        Assert.Equal(type == "Warning" ? 0 : 2, result.Summary.Pending.TotalRecords);
+        Assert.Equal(type == "Warning" ? 0m : 500m, result.Summary.Pending.AssessedPenalties);
     }
 
     [Fact]
@@ -144,6 +149,17 @@ public class ReportTests
         Assert.Equal("2026-10-01", root.GetProperty("date_range").GetProperty("from").GetString());
         Assert.Equal(7, root.GetProperty("summary").GetProperty("total").GetProperty("total_records").GetInt32());
         Assert.Equal(1200m, root.GetProperty("summary").GetProperty("total").GetProperty("assessed_penalties").GetDecimal());
+        var summary = root.GetProperty("summary");
+        Assert.Equal(2, summary.GetProperty("resolved").GetProperty("total_records").GetInt32());
+        var warnings = summary.GetProperty("warnings_issued");
+        Assert.Equal(3, warnings.GetProperty("total_records").GetInt32());
+        Assert.Equal(0m, warnings.GetProperty("assessed_penalties").GetDecimal());
+        Assert.False(warnings.TryGetProperty("resolved", out _));
+        Assert.False(warnings.TryGetProperty("pending", out _));
+        var tickets = summary.GetProperty("tickets_issued");
+        Assert.Equal(4, tickets.GetProperty("total_records").GetInt32());
+        Assert.Equal(1200m, tickets.GetProperty("assessed_penalties").GetDecimal());
+        Assert.False(tickets.TryGetProperty("total", out _));
         var id = root.GetProperty("id").GetInt32();
         fixture.Tickets.Rows.Clear();
         var detail = await host.SendAsync(HttpMethod.Get, $"/api/admin/reports/{id}", role);

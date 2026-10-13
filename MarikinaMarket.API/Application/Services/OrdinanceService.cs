@@ -43,7 +43,6 @@ namespace MarikinaMarket.API.Application.Services
                 Series = ordinance.Series,
                 MarketCode = ordinance.MarketCode,
                 Title = ordinance.Title,
-                Description = ordinance.Description,
                 PenaltyTiers = ordinance.PenaltyTiers.OrderBy(t => t.OffenseNumber)
                     .Select(t => new OrdinancePenaltyTierResponse
                     {
@@ -59,14 +58,12 @@ namespace MarikinaMarket.API.Application.Services
             await _unitOfWork.BeginTransactionAsync();
             try
             {
-                await EnsureUniqueNumberAsync(ordinanceNo);
                 var ordinance = new Ordinance
                 {
                     OrdinanceNo = ordinanceNo,
                     Series = request.Series.Trim(),
                     MarketCode = request.MarketCode.Trim(),
                     Title = request.Title.Trim(),
-                    Description = request.Description.Trim(),
                     Category = request.Category,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
@@ -99,13 +96,11 @@ namespace MarikinaMarket.API.Application.Services
             {
                 var ordinance = await _repository.GetByIdAsync(id)
                     ?? throw new RecordNotFoundException("Ordinance not found.");
-                await EnsureUniqueNumberAsync(ordinanceNo, id);
 
                 if (ordinance.OrdinanceNo != ordinanceNo) ordinance.OrdinanceNo = ordinanceNo;
                 if (ordinance.Series != request.Series.Trim()) ordinance.Series = request.Series.Trim();
                 if (ordinance.MarketCode != request.MarketCode.Trim()) ordinance.MarketCode = request.MarketCode.Trim();
                 if (ordinance.Title != request.Title.Trim()) ordinance.Title = request.Title.Trim();
-                if (ordinance.Description != request.Description.Trim()) ordinance.Description = request.Description.Trim();
                 if (ordinance.Category != request.Category) ordinance.Category = request.Category;
 
                 await ReconcileTiersAsync(ordinance, request.PenaltyTiers);
@@ -151,12 +146,6 @@ namespace MarikinaMarket.API.Application.Services
             if (added.Count > 0) await _repository.AddTiersAsync(added);
         }
 
-        private async Task EnsureUniqueNumberAsync(string number, int? excludingId = null)
-        {
-            if (await _repository.NumberExistsAsync(number, excludingId))
-                throw new InvalidRequestException("An ordinance with this number already exists.");
-        }
-
         private static void ValidateId(int id)
         {
             if (id <= 0) throw new InvalidRequestException("Ordinance ID must be greater than zero.");
@@ -169,10 +158,9 @@ namespace MarikinaMarket.API.Application.Services
             ValidateText(request.Series, "Series", 100);
             ValidateText(request.MarketCode, "Market code");
             ValidateText(request.Title, "Title", 250);
-            ValidateText(request.Description, "Description", 1000);
-            var number = $"Ord. No. {request.OrdinanceNumber.Trim()} Series of {request.Series.Trim()}";
-            if (number.Length > 100)
-                throw new InvalidRequestException("Formatted ordinance number must not exceed 100 characters.");
+            var number = request.OrdinanceNumber.Trim();
+            if (number.Any(character => character < '0' || character > '9'))
+                throw new InvalidRequestException("Ordinance number must contain only digits, without a prefix or series.");
             if (!Enum.IsDefined(request.Category))
                 throw new InvalidRequestException("Invalid ordinance category.");
             if (request.PenaltyTiers is null || request.PenaltyTiers.Count == 0)
@@ -217,8 +205,7 @@ namespace MarikinaMarket.API.Application.Services
                 OrdinanceNo = ordinance.OrdinanceNo, 
                 Series = ordinance.Series,
                 MarketCode = ordinance.MarketCode, 
-                Title = ordinance.Title, 
-                Description = ordinance.Description
+                Title = ordinance.Title
             });
 
         private static T MapResponse<T>(Ordinance ordinance, T response) where T : OrdinanceSummaryResponse

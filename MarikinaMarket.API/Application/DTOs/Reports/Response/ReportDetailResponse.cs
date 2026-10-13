@@ -17,15 +17,8 @@ namespace MarikinaMarket.API.Application.DTOs.Reports.Response
         public required ReportRecordGroupResponse Total { get; set; }
         public required ReportRecordGroupResponse Resolved { get; set; }
         public required ReportRecordGroupResponse Pending { get; set; }
-        public ReportStatusBreakdownResponse? WarningsIssued { get; set; }
-        public ReportStatusBreakdownResponse? TicketsIssued { get; set; }
-    }
-
-    public class ReportStatusBreakdownResponse
-    {
-        public required ReportRecordGroupResponse Total { get; set; }
-        public required ReportRecordGroupResponse Resolved { get; set; }
-        public required ReportRecordGroupResponse Pending { get; set; }
+        public ReportRecordGroupResponse? WarningsIssued { get; set; }
+        public ReportRecordGroupResponse? TicketsIssued { get; set; }
     }
 
     public class ReportRecordGroupResponse

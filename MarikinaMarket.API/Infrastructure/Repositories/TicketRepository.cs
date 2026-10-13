@@ -90,6 +90,12 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .FirstOrDefaultAsync(t => t.Id == ticketId);
         }
 
+        public Task<Ticket?> GetVendorTicketByIdAsync(int ticketId, int userId)
+            => _context.Tickets.AsTracking()
+                .Include(ticket => ticket.CommunityServiceLogs)
+                .Where(ticket => ticket.Id == ticketId && ticket.Vendor!.UserId == userId)
+                .FirstOrDefaultAsync();
+
         public async Task<List<VendorComplianceTicket>> GetVendorComplianceTicketsAsync(
             IReadOnlyCollection<int> vendorIds, DateTime windowStart, DateTime calculatedAt)
         {
@@ -131,11 +137,16 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             };
         }
 
-        public async Task<TicketDetailResponse?> GetTicketDetailAsync(int ticketId)
+        public Task<TicketDetailResponse?> GetTicketDetailAsync(int ticketId)
+            => ProjectTicketDetail(_context.Tickets.Where(ticket => ticket.Id == ticketId)).FirstOrDefaultAsync();
+
+        public Task<TicketDetailResponse?> GetVendorTicketDetailAsync(int ticketId, int userId)
+            => ProjectTicketDetail(_context.Tickets.AsNoTracking()
+                .Where(ticket => ticket.Id == ticketId && ticket.Vendor!.UserId == userId)).FirstOrDefaultAsync();
+
+        private static IQueryable<TicketDetailResponse> ProjectTicketDetail(IQueryable<Ticket> tickets)
         {
-            return await _context.Tickets
-                .Where(t => t.Id == ticketId)
-                .Select(t => new TicketDetailResponse
+            return tickets.Select(t => new TicketDetailResponse
                 {
                     TicketId = t.Id,
                     VendorId = t.VendorId,
@@ -170,8 +181,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                         ? t.IssuedAt.AddDays(5) : null,
                     TotalFineAmount = t.TotalPaymentAmount ?? null,
                     TicketEvidences = t.TicketEvidences!.Select(e => e.FileKey).ToList() ?? new List<string>(),
-                })
-                .FirstOrDefaultAsync();
+                });
         }
 
         public async Task<int> GetNewControlNumber()
@@ -227,6 +237,48 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             await _context.Tickets.AddAsync(ticket);
 
             return ticket;
+        }
+
+        public async Task<List<VendorInspectionSummary>> GetVendorInspectionsAsync(
+            int userId, int offset, int limit, VendorInspectionFilters filters)
+        {
+            var query = ApplyVendorTicketFilters(_context.Tickets.AsNoTracking(), userId, filters);
+            return await query
+                .OrderByDescending(ticket => ticket.IssuedAt)
+                .ThenByDescending(ticket => ticket.Id)
+                .Skip(offset)
+                .Take(limit + 1)
+                .Select(ticket => new VendorInspectionSummary
+                {
+                    Id = ticket.Id,
+                    ControlNumber = ticket.ControlNumber,
+                    Type = ticket.Type,
+                    Ordinances = ticket.TicketViolations.OrderBy(violation => violation.Id)
+                        .Select(violation => violation.Ordinance!).ToList(),
+                    IssuedAt = ticket.IssuedAt,
+                    Status = ticket.Status
+                }).ToListAsync();
+        }
+
+        public Task<int> GetVendorInspectionCountAsync(int userId, VendorInspectionFilters filters)
+            => ApplyVendorTicketFilters(_context.Tickets.AsNoTracking(), userId, filters).CountAsync();
+
+        private static IQueryable<Ticket> ApplyVendorTicketFilters(
+            IQueryable<Ticket> tickets, int userId, VendorInspectionFilters filters)
+        {
+            var query = tickets.Where(ticket => ticket.Vendor!.UserId == userId);
+            if (filters.Type.HasValue)
+                query = query.Where(ticket => ticket.Type == filters.Type.Value);
+            if (!string.IsNullOrWhiteSpace(filters.Search))
+            {
+                var search = filters.Search.Trim().ToLowerInvariant();
+                query = query.Where(ticket =>
+                    (ticket.ControlNumber != null && ticket.ControlNumber.ToLower().Contains(search)) ||
+                    ticket.TicketViolations.Any(violation =>
+                        violation.Ordinance!.OrdinanceNo.ToLower().Contains(search) ||
+                        violation.Ordinance.Title.ToLower().Contains(search)));
+            }
+            return query;
         }
 
         public async Task<List<InspectionSummary>> GetInspectionsAsync(
