@@ -123,7 +123,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     MarketSectionName = request.MarketSection!.Name,
                     StallNumber = request.StallNumber,
                     RequestedAt = request.RequestedAt,
-                    Status = request.Status
+                    Status = request.Status,
+                    Version = request.Version
                 })
                 .ToListAsync();
         }

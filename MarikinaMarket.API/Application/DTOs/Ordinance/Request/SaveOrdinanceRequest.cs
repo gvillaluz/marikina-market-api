@@ -9,7 +9,6 @@ namespace MarikinaMarket.API.Application.DTOs.Ordinance.Request
         public required string MarketCode { get; set; }
         public required ViolationCategory Category { get; set; }
         public required string Title { get; set; }
-        public required string Description { get; set; }
         public required List<SavePenaltyTierRequest> PenaltyTiers { get; set; }
     }
 }

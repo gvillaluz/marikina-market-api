@@ -56,12 +56,6 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .FirstOrDefaultAsync(o => o.Id == id);
         }
 
-        public async Task<bool> NumberExistsAsync(string ordinanceNo, int? excludingId = null)
-        {
-            return await _context.Ordinances.AnyAsync(o => o.OrdinanceNo == ordinanceNo
-                && (!excludingId.HasValue || o.Id != excludingId.Value));
-        }
-
         public async Task AddAsync(Ordinance ordinance)
         {
             await _context.Ordinances.AddAsync(ordinance);

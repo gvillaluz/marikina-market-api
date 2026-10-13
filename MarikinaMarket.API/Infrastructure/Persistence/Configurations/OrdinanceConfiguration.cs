@@ -1,4 +1,4 @@
-﻿using MarikinaMarket.API.Domain.Entities;
+using MarikinaMarket.API.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -18,14 +18,10 @@ namespace MarikinaMarket.API.Infrastructure.Persistence.Configurations
                 .HasColumnName("market_code")
                 .IsRequired();
 
-            builder.HasIndex(x => x.OrdinanceNo)
-                .IsUnique();
+            builder.HasIndex(x => x.OrdinanceNo);
 
             builder.Property(x => x.Title)
                 .HasMaxLength(250);
-
-            builder.Property(x => x.Description)
-                .HasMaxLength(1000);
 
             builder.Property(x => x.Category)
                 .HasConversion<string>();

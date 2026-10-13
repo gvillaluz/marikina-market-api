@@ -19,7 +19,6 @@ namespace MarikinaMarket.API.Application.DTOs.Tickets.Internal
         public TicketStatus Status { get; set; }
         public Severity Severity { get; set; }
         public PenaltyType PenaltyType { get; set; }
-        public decimal TotalPaymentAmount { get; set; }
         public DateTime IssuedAt { get; set; }
         public uint Version { get; set; }
     }

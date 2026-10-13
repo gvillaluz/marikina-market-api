@@ -451,12 +451,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("timezone('utc', now())");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("description");
-
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -495,77 +489,9 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasName("pk_ordinances");
 
                     b.HasIndex("OrdinanceNo")
-                        .IsUnique()
                         .HasDatabaseName("ix_ordinances_ordinance_no");
 
                     b.ToTable("ordinances", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            Category = "Obstruction",
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Sections 42, 47, and 53 of the Revised Marikina Market Code of 2014 (amending Ordinance No. 149, Series of 1999) prohibit peddling or hawking in passageways, placing items on corridors and walkways, and conducting any vending activities on streets and sidewalks within the Marikina Public Market Zone. Stall holders must strictly observe their designated stall boundaries at all times.",
-                            IsActive = true,
-                            MarketCode = "Market Code",
-                            OrdinanceNo = "Ord. No. 11, Series of 2014",
-                            Series = "2014",
-                            Title = "Revised Marikina Market Code of 2014 — Stall Boundary and Walkway Violations",
-                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
-                        },
-                        new
-                        {
-                            Id = 2,
-                            Category = "Noise",
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Section 32 of the Revised Marikina Peace, Order, Public Safety and Security Code of 2006 regulates noise and revelries within the City. Audio-amplified equipment such as stereos, karaokes, videoke, and similar musical devices shall not play beyond normally accepted sound modulation after 10:00 PM. Market vendors are additionally prohibited from using sidewalks and streets as extensions of their stalls under Section 5, subject to fine of P1,000 and confiscation of goods. Alternative penalties including blood donation (for fines not exceeding P1,000) and community service are authorized under Appendix B.",
-                            IsActive = true,
-                            MarketCode = "Peace & Order Code",
-                            OrdinanceNo = "Ord. No. 145, Series of 2006",
-                            Series = "2006",
-                            Title = "Revised Marikina Peace, Order, Public Safety and Security Code of 2006",
-                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
-                        },
-                        new
-                        {
-                            Id = 3,
-                            Category = "Licensing",
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Ordinance No. 104, Series of 2007 amends Section 12 of the Marikina Market Code requiring all vendors and helpers in public and private markets within the City of Marikina to secure and display a valid Market Identification Card at all times. The Market ID costs Seventy-Five Pesos (P75.00) and must be renewed annually. Operating without a valid Market ID or business permit constitutes a violation subject to penalties under Section 79 of the Market Code of 2014.",
-                            IsActive = true,
-                            MarketCode = "Market I.D.",
-                            OrdinanceNo = "Ord. No. 104, Series of 2007",
-                            Series = "2007",
-                            Title = "Ordinance Amending Section 12 of the Marikina Market Code — Market Identification Card Requirements",
-                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
-                        },
-                        new
-                        {
-                            Id = 4,
-                            Category = "Sanitation",
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Chapter VIII (Sections 66–75) of the Revised Marikina Market Code of 2014 governs the maintenance of market premises and sanitation standards. Stallholders must keep stalls clean at all times, use impervious materials on counters and walls per Section 72, protect cooked and raw foods from contamination per Section 70, clean stalls at the end of each business day per Section 73, and properly dispose of garbage per Section 69. All food eatery owners must complete Food Safety and Personal Hygiene Training per Section 14. A fine of One Thousand Pesos (P1,000.00) is imposed per violation. Third violation results in cancellation of license.",
-                            IsActive = true,
-                            MarketCode = "Market Code",
-                            OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VIII",
-                            Series = "2014",
-                            Title = "Revised Marikina Market Code of 2014 — Sanitation and Cleanliness Standards",
-                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
-                        },
-                        new
-                        {
-                            Id = 5,
-                            Category = "WeightMeasures",
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Chapter VI, Section 30 of the Revised Marikina Market Code of 2014 (amending Ordinance No. 160, Series of 2001 and Ordinance No. 283, Series of 1997) prohibits the use of underweight scales, placement of concealed materials in weighing scales, and any manipulation that reflects a weight other than the true weight of goods. All weighing devices must be registered with the City Treasury and submitted for annual re-inspection. Confiscated scales must be redeemed within five (5) working days. A specific graduated penalty schedule applies independently from the general market code penalties.",
-                            IsActive = true,
-                            MarketCode = "Market Code",
-                            OrdinanceNo = "Ord. No. 11, Series of 2014 — Chapter VI",
-                            Series = "2014",
-                            Title = "Revised Marikina Market Code of 2014 — Weights and Measures Compliance",
-                            UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
-                        });
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.OrdinancePenaltyTier", b =>
@@ -603,160 +529,6 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasDatabaseName("ix_ordinance_penalty_tiers_ordinance_id_offense_number");
 
                     b.ToTable("ordinance_penalty_tiers", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            OffenseNumber = 1,
-                            OrdinanceId = 1,
-                            PenaltyAmount = 1000.00m,
-                            Severity = "Minor"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            OffenseNumber = 2,
-                            OrdinanceId = 1,
-                            PenaltyAmount = 1500.00m,
-                            Severity = "Moderate"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            OffenseNumber = 3,
-                            OrdinanceId = 1,
-                            PenaltyAmount = 2000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            OffenseNumber = 4,
-                            OrdinanceId = 1,
-                            PenaltyAmount = 5000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            OffenseNumber = 1,
-                            OrdinanceId = 2,
-                            PenaltyAmount = 500.00m,
-                            Severity = "Minor"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            OffenseNumber = 2,
-                            OrdinanceId = 2,
-                            PenaltyAmount = 1000.00m,
-                            Severity = "Moderate"
-                        },
-                        new
-                        {
-                            Id = 7,
-                            OffenseNumber = 3,
-                            OrdinanceId = 2,
-                            PenaltyAmount = 2000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 8,
-                            OffenseNumber = 4,
-                            OrdinanceId = 2,
-                            PenaltyAmount = 3000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 9,
-                            OffenseNumber = 1,
-                            OrdinanceId = 3,
-                            PenaltyAmount = 100.00m,
-                            Severity = "Minor"
-                        },
-                        new
-                        {
-                            Id = 10,
-                            OffenseNumber = 2,
-                            OrdinanceId = 3,
-                            PenaltyAmount = 500.00m,
-                            Severity = "Moderate"
-                        },
-                        new
-                        {
-                            Id = 11,
-                            OffenseNumber = 3,
-                            OrdinanceId = 3,
-                            PenaltyAmount = 1000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 12,
-                            OffenseNumber = 4,
-                            OrdinanceId = 3,
-                            PenaltyAmount = 2000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 13,
-                            OffenseNumber = 1,
-                            OrdinanceId = 4,
-                            PenaltyAmount = 1000.00m,
-                            Severity = "Moderate"
-                        },
-                        new
-                        {
-                            Id = 14,
-                            OffenseNumber = 2,
-                            OrdinanceId = 4,
-                            PenaltyAmount = 1500.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 15,
-                            OffenseNumber = 3,
-                            OrdinanceId = 4,
-                            PenaltyAmount = 2000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 16,
-                            OffenseNumber = 1,
-                            OrdinanceId = 5,
-                            PenaltyAmount = 1500.00m,
-                            Severity = "Moderate"
-                        },
-                        new
-                        {
-                            Id = 17,
-                            OffenseNumber = 2,
-                            OrdinanceId = 5,
-                            PenaltyAmount = 3000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 18,
-                            OffenseNumber = 3,
-                            OrdinanceId = 5,
-                            PenaltyAmount = 5000.00m,
-                            Severity = "High"
-                        },
-                        new
-                        {
-                            Id = 19,
-                            OffenseNumber = 4,
-                            OrdinanceId = 5,
-                            PenaltyAmount = 5000.00m,
-                            Severity = "High"
-                        });
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.OtpVerification", b =>
@@ -848,6 +620,77 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasDatabaseName("ix_refresh_tokens_user_id");
 
                     b.ToTable("refresh_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Report", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("DateGenerated")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_generated");
+
+                    b.Property<DateOnly>("From")
+                        .HasColumnType("date")
+                        .HasColumnName("from");
+
+                    b.Property<int>("GeneratedById")
+                        .HasColumnType("integer")
+                        .HasColumnName("generated_by_id");
+
+                    b.Property<string>("GeneratedByName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("generated_by_name");
+
+                    b.Property<decimal>("PendingTicketPenalties")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("pending_ticket_penalties");
+
+                    b.Property<int>("PendingTicketRecords")
+                        .HasColumnType("integer")
+                        .HasColumnName("pending_ticket_records");
+
+                    b.Property<decimal>("ResolvedTicketPenalties")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("resolved_ticket_penalties");
+
+                    b.Property<int>("ResolvedTicketRecords")
+                        .HasColumnType("integer")
+                        .HasColumnName("resolved_ticket_records");
+
+                    b.Property<DateOnly>("To")
+                        .HasColumnType("date")
+                        .HasColumnName("to");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("type");
+
+                    b.Property<int>("WarningRecords")
+                        .HasColumnType("integer")
+                        .HasColumnName("warning_records");
+
+                    b.HasKey("Id")
+                        .HasName("pk_reports");
+
+                    b.HasIndex("GeneratedById")
+                        .HasDatabaseName("ix_reports_generated_by_id");
+
+                    b.HasIndex("DateGenerated", "Id")
+                        .HasDatabaseName("ix_reports_date_generated_id");
+
+                    b.ToTable("reports", (string)null);
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Ticket", b =>
@@ -1770,6 +1613,16 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasConstraintName("fk_refresh_tokens_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Report", b =>
+                {
+                    b.HasOne("MarikinaMarket.API.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("GeneratedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_reports_asp_net_users_generated_by_id");
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.Ticket", b =>

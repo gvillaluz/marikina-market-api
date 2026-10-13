@@ -1,4 +1,5 @@
-﻿using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
+using Npgsql;
+using MarikinaMarket.API.Application.DTOs.Enforcers.Request;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.User.Response;
@@ -25,6 +26,26 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             _userManager = userManager;
             _signInManager = signInManager;
             _context = context;
+        }
+
+        public async Task DeleteDeviceTokenAsync(string deviceToken)
+        {
+            await _context.UserDeviceTokens.Where(t => t.DeviceToken == deviceToken)
+                .ExecuteDeleteAsync();
+        }
+
+        public async Task RevokeRefreshTokenAsync(string refreshToken)
+        {
+            await _context.RefreshTokens.Where(t => t.Token == refreshToken && !t.IsRevoked)
+                .ExecuteUpdateAsync(update => update.SetProperty(t => t.IsRevoked, true));
+        }
+
+        public async Task DeleteOldTokensAsync(DateTime cutoff, CancellationToken cancellationToken = default)
+        {
+            await _context.UserDeviceTokens.Where(t => t.CreatedAt <= cutoff)
+                .ExecuteDeleteAsync(cancellationToken);
+            await _context.RefreshTokens.Where(t => t.CreatedAt <= cutoff)
+                .ExecuteDeleteAsync(cancellationToken);
         }
 
         public async Task<AccountCountsResponse> GetAccountCountsAsync()
@@ -114,7 +135,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             {
                 return await _userManager.CreateAsync(user);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception ex) when (ex is DbUpdateConcurrencyException
+                or PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } })
             {
                 throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
             }
@@ -141,7 +164,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             {
                 return await _userManager.AddToRoleAsync(user, role);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception ex) when (ex is DbUpdateConcurrencyException
+                or PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } })
             {
                 throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
             }
