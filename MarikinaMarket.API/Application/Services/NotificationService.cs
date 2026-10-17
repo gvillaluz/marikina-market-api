@@ -15,6 +15,7 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IEmailService _emailService;
         private readonly IUserRepository _userRepository;
         private readonly INotificationRepository _notificationRepository;
+        private readonly IVendorRepository _vendorRepository;
         private const int PAGE_SIZE = 10;
         private readonly IAuditLogService? _auditService;
         private readonly AuditLogContext? _audit;
@@ -24,6 +25,7 @@ namespace MarikinaMarket.API.Application.Services
             IEmailService emailService,
             IUserRepository userRepository,
             INotificationRepository notificationRepository,
+            IVendorRepository vendorRepository,
             IAuditLogService? auditService = null, AuditLogContext? audit = null
             )
         {
@@ -31,6 +33,7 @@ namespace MarikinaMarket.API.Application.Services
             _emailService = emailService;
             _userRepository = userRepository;
             _notificationRepository = notificationRepository;
+            _vendorRepository = vendorRepository;
             _auditService = auditService;
             _audit = audit;
         }
@@ -71,28 +74,60 @@ namespace MarikinaMarket.API.Application.Services
             };
         }
 
-        public async Task SaveNotificationAsync(int ticketId, int enforcerId, string message, TicketStatus status)
+        public async Task<PageResponse<GetVendorNotificationsResponse>> GetNotificationsByVendorUserIdAsync(int userId, int offset, string filter)
+        {
+            filter = ValidateVendorQuery(offset, filter);
+            var vendorId = await GetVendorIdAsync(userId);
+            var notifications = await _notificationRepository.GetVendorNotificationsAsync(vendorId, PAGE_SIZE, offset, filter);
+            var total = await _notificationRepository.GetVendorNotificationCountAsync(vendorId, filter);
+            return new PageResponse<GetVendorNotificationsResponse>
+            {
+                HasMore = notifications.Count > PAGE_SIZE,
+                Total = total,
+                Items = notifications.Take(PAGE_SIZE).Select(notification => new GetVendorNotificationsResponse
+                {
+                    Id = notification.Id, VendorId = notification.VendorId, EnforcerId = notification.EnforcerId,
+                    TicketId = notification.TicketId, ControlNumber = notification.Ticket!.ControlNumber!,
+                    TradeName = notification.Ticket.Vendor!.BusinessName,
+                    MarketSectionName = notification.Ticket.MarketSection!.Name,
+                    Type = notification.Ticket.Type,
+                    PenaltyType = notification.Ticket.PenaltyType,
+                    TotalFineAmount = notification.Ticket.TotalPaymentAmount,
+                    DueDate = notification.Ticket.Type == ViolationType.Warning ? null : notification.Ticket.IssuedAt.AddDays(5),
+                    Status = notification.Ticket.Type == ViolationType.Warning ? null : notification.Status,
+                    Message = notification.Message, IsRead = notification.VendorIsRead, CreatedAt = notification.CreatedAt
+                }).ToList()
+            };
+        }
+
+        public async Task SaveNotificationAsync(int ticketId, int enforcerId, int vendorId, string message, TicketStatus status)
         {
             if (ticketId <= 0)
                 throw new ValidationException("Ticket identification is missing.");
 
-            if (string.IsNullOrEmpty(message))
-                throw new ValidationException("Message should not be empty.");
+            if (enforcerId <= 0 || vendorId <= 0)
+                throw new ValidationException("Valid enforcer and vendor IDs are required.");
+            if (!Enum.IsDefined(status))
+                throw new ValidationException("Invalid notification status.");
+            if (string.IsNullOrWhiteSpace(message) || message.Length > 2000)
+                throw new ValidationException("Notification message must contain between 1 and 2000 characters.");
 
             await _notificationRepository.SaveNotificationAsync(new Notification
             {
                 TicketId = ticketId,
                 EnforcerId = enforcerId,
+                VendorId = vendorId,
                 Status = status,
                 Message = message,
                 IsRead = false,
+                VendorIsRead = false,
                 CreatedAt = DateTime.UtcNow
             });
         }
 
-        public async Task SendEmailAsync(string toEmail, string subject, string body)
+        public async Task SendEmailAsync(string toEmail, string subject, string body, string accentColor = "#0B2D5B")
         {
-            await _emailService.SendEmailAsync(toEmail, subject, body);
+            await _emailService.SendEmailAsync(toEmail, subject, body, accentColor);
         }
 
         public async Task<bool> SendPushNotificationAsync(int userId, string title, string body, Dictionary<string, string>? data = null)
@@ -136,6 +171,43 @@ namespace MarikinaMarket.API.Application.Services
             }
 
             return anySucceeded;
+        }
+
+        public async Task<bool> SendPushNotificationToVendorAsync(int vendorId, string title, string body, Dictionary<string, string>? data = null)
+        {
+            if (vendorId <= 0)
+                throw new ValidationException("Vendor ID must be greater than zero.");
+            var userId = await _vendorRepository.GetVendorUserIdAsync(vendorId)
+                ?? throw new RecordNotFoundException("Vendor record not found.");
+            return await SendPushNotificationAsync(userId, title, body, data);
+        }
+
+        public async Task MarkVendorNotificationAsReadAsync(int notificationId, int userId)
+        {
+            if (notificationId <= 0)
+                throw new ValidationException("Notification ID must be greater than zero.");
+            var vendorId = await GetVendorIdAsync(userId);
+            var notification = await _notificationRepository.GetVendorNotificationByIdAsync(notificationId, vendorId)
+                ?? throw new RecordNotFoundException("Notification record not found.");
+            notification.VendorIsRead = true;
+            await _notificationRepository.SaveChangesAsync();
+        }
+
+        private async Task<int> GetVendorIdAsync(int userId)
+        {
+            if (userId <= 0)
+                throw new UnauthorizedAccessException("Invalid or missing identity token context.");
+            return await _vendorRepository.GetVendorIdByUserIdAsync(userId)
+                ?? throw new RecordNotFoundException("Vendor record not found.");
+        }
+
+        private static string ValidateVendorQuery(int offset, string filter)
+        {
+            if (offset < 0)
+                throw new ValidationException("Offset must be zero or greater.");
+            if (string.Equals(filter?.Trim(), "All", StringComparison.OrdinalIgnoreCase)) return "All";
+            if (string.Equals(filter?.Trim(), "Unread", StringComparison.OrdinalIgnoreCase)) return "Unread";
+            throw new ValidationException("Filter must be All or Unread.");
         }
 
         public async Task MarkAsReadNotificationAsync(int notificationId, int enforcerId)

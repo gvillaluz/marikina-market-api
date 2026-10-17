@@ -6,11 +6,15 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface IVendorRepository
     {
+        public Task<VendorProfile?> GetVendorProfileByUserIdAsync(int userId);
         public Task<VendorTicketSummary?> GetByIdAsync(int id);
+        public Task<int?> GetVendorIdByUserIdAsync(int userId);
+        public Task<int?> GetVendorUserIdAsync(int vendorId);
         public Task<VendorProfile> CreateVendorAsync(VendorProfile vendorProfile);
         public Task<VendorRegistrationRequest> AddVendorRegistryAsync(VendorRegistrationRequest vendor);
         public Task<VendorRegistrationRequest?> GetRegistrationById(int registrationId);
-        public Task<bool> RegistrationExistsAsync(string email, string businessId);
+        public Task<bool> RegistrationEmailExistsAsync(string email);
+        public Task<bool> RegistrationBusinessIdExistsAsync(string businessId);
         public Task<VendorRegistrationStatusCounts> GetVendorRegistrationStatusCountsAsync();
         public Task<DashboardVendorCounts> GetDashboardVendorCountsAsync();
         public Task<List<VendorRegistrationSummary>> GetVendorRegistrationSummariesAsync(

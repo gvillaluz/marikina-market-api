@@ -6,5 +6,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
     public interface IAdminUserService
     {
         Task<AdminUserResponse> CreateUserAsync(CreateAdminUserRequest request, int adminId);
+        Task<AdminAccountDetailsResponse> GetAccountAsync(int userId, int adminId);
+        Task<AdminAccountDetailsResponse> UpdateAccountAsync(int userId, UpdateAdminUserRequest request, int adminId);
     }
 }

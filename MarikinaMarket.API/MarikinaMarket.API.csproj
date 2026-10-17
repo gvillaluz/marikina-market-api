@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Remove="Domain\Enums\OrdinanceCode.cs" />
+    <EmbeddedResource Include="wwwroot\marikina-city-seal.png" LogicalName="MarikinaMarket.CitySeal" />
   </ItemGroup>
 
   <ItemGroup>

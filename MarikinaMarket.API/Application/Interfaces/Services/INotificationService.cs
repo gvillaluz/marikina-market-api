@@ -8,9 +8,12 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
     {
         Task<bool> SendPushNotificationAsync(int userId, string title, string body, Dictionary<string, string>? data = null);
         Task<bool> SendPushNotificationToAdminsAsync(string title, string body, Dictionary<string, string>? data = null);
-        Task SendEmailAsync(string toEmail, string subject, string body);
+        Task<bool> SendPushNotificationToVendorAsync(int vendorId, string title, string body, Dictionary<string, string>? data = null);
+        Task SendEmailAsync(string toEmail, string subject, string body, string accentColor = "#0B2D5B");
         Task<PageResponse<GetNotificationsResponse>> GetNotificationsByEnforcerIdAsync(int enforcerId, int offset, string filter);
-        Task SaveNotificationAsync(int ticketId, int enforcerId, string message, TicketStatus status);
+        Task<PageResponse<GetVendorNotificationsResponse>> GetNotificationsByVendorUserIdAsync(int userId, int offset, string filter);
+        Task SaveNotificationAsync(int ticketId, int enforcerId, int vendorId, string message, TicketStatus status);
         Task MarkAsReadNotificationAsync(int notificationId, int enforcerId);
+        Task MarkVendorNotificationAsReadAsync(int notificationId, int userId);
     }
 }

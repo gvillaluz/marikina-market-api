@@ -9,10 +9,12 @@ namespace MarikinaMarket.API.Application.Services
     public class AdminAnalyticsService : IAdminAnalyticsService
     {
         private readonly ITicketRepository _ticketRepository;
+        private readonly TimeProvider _clock;
 
-        public AdminAnalyticsService(ITicketRepository ticketRepository)
+        public AdminAnalyticsService(ITicketRepository ticketRepository, TimeProvider? clock = null)
         {
             _ticketRepository = ticketRepository;
+            _clock = clock ?? TimeProvider.System;
         }
 
         public async Task<List<ViolationTrendPointResponse>> GetViolationTrendAsync()
@@ -20,13 +22,14 @@ namespace MarikinaMarket.API.Application.Services
             var (yearStart, now) = GetCurrentYearRange();
             var buckets = await _ticketRepository.GetViolationTrendAsync(yearStart, now);
             var trend = new List<ViolationTrendPointResponse>();
+            var year = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(yearStart, "Asia/Manila").Year;
 
             for (var month = 1; month <= 12; month++)
             {
                 var monthBuckets = buckets.Where(bucket => bucket.Month == month).ToList();
                 trend.Add(new ViolationTrendPointResponse
                 {
-                    Year = yearStart.Year,
+                    Year = year,
                     Month = month,
                     MonthName = CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(month),
                     LowSeverityCount = monthBuckets
@@ -169,7 +172,9 @@ namespace MarikinaMarket.API.Application.Services
         {
             var (yearStart, now) = GetCurrentYearRange();
             var previousYearStart = yearStart.AddYears(-1);
-            var previousYearEnd = previousYearStart.Add(now - yearStart);
+            var manilaTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Manila");
+            var previousYearEnd = TimeZoneInfo.ConvertTimeToUtc(
+                TimeZoneInfo.ConvertTimeFromUtc(now, manilaTimeZone).AddYears(-1), manilaTimeZone);
             var sections = await _ticketRepository.GetMarketSectionTrendCountsAsync(
                 yearStart,
                 now,
@@ -213,10 +218,13 @@ namespace MarikinaMarket.API.Application.Services
                 .ToList();
         }
 
-        private static (DateTime Start, DateTime End) GetCurrentYearRange()
+        private (DateTime Start, DateTime End) GetCurrentYearRange()
         {
-            var now = DateTime.UtcNow;
-            return (new DateTime(now.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc), now);
+            var now = _clock.GetUtcNow().UtcDateTime;
+            var manilaTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Manila");
+            var year = TimeZoneInfo.ConvertTimeFromUtc(now, manilaTimeZone).Year;
+            var localYearStart = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+            return (TimeZoneInfo.ConvertTimeToUtc(localYearStart, manilaTimeZone), now);
         }
 
         private static string FormatCategory(ViolationCategory category)

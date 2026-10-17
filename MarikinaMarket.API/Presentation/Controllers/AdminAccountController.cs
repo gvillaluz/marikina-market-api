@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.DTOs.User.Request;
 using MarikinaMarket.API.Application.DTOs.User.Response;
@@ -26,6 +27,10 @@ namespace MarikinaMarket.API.Presentation.Controllers
         public async Task<ActionResult<PageResponse<UserSummaryResponse>>> GetUserSummaries(
             [FromQuery] UserSummaryFilter filters,
             [FromQuery, Range(0, int.MaxValue)] int offset = 0)
-            => Ok(await _service.GetUserSummariesAsync(offset, filters));
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId) || adminId <= 0)
+                return Unauthorized();
+            return Ok(await _service.GetUserSummariesAsync(offset, filters, adminId));
+        }
     }
 }

@@ -178,6 +178,143 @@ public class RegistrationVersionTests
     [Theory]
     [InlineData(RequestStatus.Approved)]
     [InlineData(RequestStatus.Rejected)]
+    public async Task NeedsInformationCanBeApprovedOrRejectedOnce(RequestStatus status)
+    {
+        var fixture = new ReviewFixture();
+        fixture.Record.Status = RequestStatus.NeedsInformation;
+
+        await fixture.Review(status, 1200);
+
+        Assert.Equal(status, fixture.Record.Status);
+        Assert.Equal(status == RequestStatus.Approved ? 1 : 0, fixture.UserCreates);
+        Assert.Equal(1, fixture.Saves);
+        Assert.Equal(1, fixture.Commits);
+        Assert.Equal(1, fixture.Emails);
+        await Assert.ThrowsAsync<AlreadyProcessedException>(() => fixture.Review(status, 1300));
+        Assert.Equal(1, fixture.Saves);
+        Assert.Equal(status == RequestStatus.Approved ? 1 : 0, fixture.UserCreates);
+    }
+
+    [Theory]
+    [InlineData(RequestStatus.Approved, "Your vendor registration is approved")]
+    [InlineData(RequestStatus.Rejected, "Your vendor registration was rejected")]
+    [InlineData(RequestStatus.NeedsInformation, "More information is needed")]
+    public async Task ReviewEmailIncludesBrandedNoticeAndCorrectDetailsAfterCommit(RequestStatus status, string heading)
+    {
+        var fixture = new ReviewFixture();
+        await fixture.Review(status, 1200);
+        Assert.True(fixture.EmailAfterCommit);
+        Assert.Equal(fixture.Record.Email, fixture.EmailRecipient);
+        var body = Assert.IsType<string>(fixture.EmailBody);
+        Assert.Contains(heading, body);
+        Assert.Contains("#0B2D5B", body);
+        Assert.Contains("Reyes Fresh Fish", body);
+        Assert.Contains("juan@example.invalid", body);
+        Assert.DoesNotContain(fixture.Record.Password, body);
+        if (status == RequestStatus.Approved)
+        {
+            Assert.Contains("Username", body);
+            Assert.Contains("0001", body);
+            Assert.Contains("mobile app", body);
+            Assert.Contains("password you provided during registration", body);
+            Assert.DoesNotContain("sign in using the email address", body);
+        }
+        else
+        {
+            Assert.Contains("Document verification", body);
+            Assert.Contains("Please submit a clear document.", body);
+            Assert.Contains("market administration office", body);
+            Assert.DoesNotContain("Username", body);
+        }
+    }
+
+    [Theory]
+    [InlineData(RequestStatus.Approved)]
+    [InlineData(RequestStatus.Rejected)]
+    [InlineData(RequestStatus.NeedsInformation)]
+    public async Task ReviewEmailEscapesVendorAndReviewInput(RequestStatus status)
+    {
+        var fixture = new ReviewFixture();
+        fixture.Record.FirstName = "Juan <script>alert(1)</script>";
+        fixture.Record.BusinessName = "Reyes <img src=x onerror=alert(1)> & Sons";
+        await fixture.Review(status, 1200, "<b>Documents</b>", "<script>alert(2)</script>\nBring a clearer copy.");
+        var body = Assert.IsType<string>(fixture.EmailBody);
+        Assert.Contains("&lt;script&gt;alert(1)&lt;/script&gt;", body);
+        Assert.Contains("&lt;img", body);
+        Assert.Contains("&amp; Sons", body);
+        Assert.DoesNotContain("<script>", body);
+        Assert.DoesNotContain("<img src=x", body);
+        if (status != RequestStatus.Approved)
+        {
+            Assert.Contains("&lt;b&gt;Documents&lt;/b&gt;", body);
+            Assert.Contains("&lt;script&gt;alert(2)&lt;/script&gt;<br", body);
+        }
+    }
+
+    [Theory]
+    [InlineData(RequestStatus.Approved)]
+    [InlineData(RequestStatus.Rejected)]
+    [InlineData(RequestStatus.NeedsInformation)]
+    public async Task EmailFailureDoesNotUndoCommittedReview(RequestStatus status)
+    {
+        var fixture = new ReviewFixture { FailEmail = true };
+        var result = await fixture.Review(status, 1200);
+        Assert.Equal(false, result.GetType().GetProperty("EmailSent")!.GetValue(result));
+        Assert.Equal(status, fixture.Record.Status);
+        Assert.Equal(1, fixture.Commits);
+        Assert.Equal(0, fixture.Rollbacks);
+    }
+
+    [Fact]
+    public void ReviewEmailMimeIncludesEmbeddedPngSeal()
+    {
+        var method = typeof(EmailService).GetMethod("CreateBody", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var body = Assert.IsAssignableFrom<MimeKit.MimeEntity>(method.Invoke(null,
+            ["<h1>Your vendor registration is approved</h1>", "#4C8B5A"]));
+        var message = new MimeKit.MimeMessage { Body = body };
+        Assert.Contains("cid:marikina-city-seal", message.HtmlBody);
+        var logo = Assert.Single(message.BodyParts.OfType<MimeKit.MimePart>(), part => part.ContentId == "marikina-city-seal");
+        Assert.Equal("image/png", logo.ContentType.MimeType);
+        using var decoded = new MemoryStream();
+        logo.Content!.DecodeTo(decoded);
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, decoded.ToArray()[..8]);
+    }
+
+    [Theory]
+    [InlineData("#0B2D5B")]
+    [InlineData("#4C8B5A")]
+    [InlineData("#C0392B")]
+    [InlineData("#B8792F")]
+    public void SharedEmailLayoutBrandsFragmentsWithTheRequestedActionAccent(string accent)
+    {
+        var method = typeof(EmailService).GetMethod("CreateBody", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var body = Assert.IsAssignableFrom<MimeKit.MimeEntity>(method.Invoke(null,
+            ["<h1>Verify your sign-in</h1><p>Code: <strong>123456</strong></p>", accent]));
+        var message = new MimeKit.MimeMessage { Body = body };
+        Assert.Contains("<!DOCTYPE html>", message.HtmlBody);
+        Assert.Contains("cid:marikina-city-seal", message.HtmlBody);
+        Assert.Contains("Marikina City Public Market", message.HtmlBody);
+        Assert.Contains("background-color:" + accent, message.HtmlBody);
+        Assert.Contains("123456", message.HtmlBody);
+        Assert.DoesNotContain("#B8792F", message.HtmlBody!.Replace(accent, ""));
+        Assert.Single(message.BodyParts.OfType<MimeKit.MimePart>(), part => part.ContentId == "marikina-city-seal");
+    }
+
+    [Theory]
+    [InlineData(RequestStatus.Approved, "#4C8B5A")]
+    [InlineData(RequestStatus.Rejected, "#C0392B")]
+    [InlineData(RequestStatus.NeedsInformation, "#B8792F")]
+    public async Task ReviewEmailUsesTheActionAccent(RequestStatus status, string accent)
+    {
+        var fixture = new ReviewFixture();
+        await fixture.Review(status, 1200);
+        Assert.Equal(accent, fixture.EmailAccent);
+    }
+
+    [Theory]
+    [InlineData(RequestStatus.Approved)]
+    [InlineData(RequestStatus.Rejected)]
     [InlineData(RequestStatus.NeedsInformation)]
     public async Task SaveConflictRollsBackAndSendsNoEmail(RequestStatus status)
     {
@@ -258,6 +395,10 @@ internal sealed class ReviewFixture
     public int UserCreates, Saves, Emails, Rollbacks, Commits;
     public uint OriginalVersion;
     public bool FailSave;
+    public bool FailEmail;
+    public string? EmailRecipient, EmailBody;
+    public string? EmailAccent;
+    public bool EmailAfterCommit;
     public ReviewFixture()
     {
         var vendors = ReviewBoundaryProxy.Create<IVendorRepository>((m, a) => m.Name switch
@@ -275,7 +416,7 @@ internal sealed class ReviewFixture
         });
         var users = ReviewBoundaryProxy.Create<IUserRepository>((m, a) => m.Name switch
         {
-            "GetNextUserNameAsync" => Task.FromResult("VEN0001-2026"),
+            "GetNextUserNameAsync" => Task.FromResult("0001"),
             "CreateUserWithPassAsync" => CreateUser(),
             "AddToRoleAsync" => Task.FromResult(IdentityResult.Success),
             _ => throw new InvalidOperationException(m.Name)
@@ -290,7 +431,7 @@ internal sealed class ReviewFixture
         });
         Service = new VendorService(users, vendors, unit,
             ReviewBoundaryProxy.Create<IMarketSectionRepository>((m, a) => Task.FromResult(Record.MarketSection)),
-            null!, null!, ReviewBoundaryProxy.Create<IEmailService>((m, a) => Email()), null!,
+            null!, null!, ReviewBoundaryProxy.Create<IEmailService>((m, a) => Email((string)a[0]!, (string)a[2]!, a.Length > 3 ? (string)a[3]! : "#0B2D5B")), null!,
             NullLogger<VendorService>.Instance);
     }
     private object? SetVersion(uint version) { OriginalVersion = version; return null; }
@@ -309,13 +450,22 @@ internal sealed class ReviewFixture
         if (Commits == 0) { Record.Status = RequestStatus.Pending; Record.Version = 1200; }
         return Task.CompletedTask;
     }
-    private Task Email() { Emails++; return Task.CompletedTask; }
-    public async Task<object> Review(RequestStatus status, uint version)
+    private Task Email(string recipient, string body, string accent)
+    {
+        Emails++;
+        EmailRecipient = recipient;
+        EmailBody = body;
+        EmailAccent = accent;
+        EmailAfterCommit = Commits > 0;
+        return FailEmail ? Task.FromException(new InvalidOperationException("Email unavailable")) : Task.CompletedTask;
+    }
+    public async Task<object> Review(RequestStatus status, uint version,
+        string reason = "Document verification", string remarks = "Please submit a clear document.")
     {
         var request = new RegistrationAdminAction
         {
             VendorRegistrationId = 42, AdminId = 7, Version = version, RequestStatus = status,
-            ReviewReason = "Document verification", ReviewRemarks = "Please submit a clear document."
+            ReviewReason = reason, ReviewRemarks = remarks
         };
         return status switch
         {

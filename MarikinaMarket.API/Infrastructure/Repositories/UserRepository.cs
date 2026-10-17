@@ -53,6 +53,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             var users = _context.Users.AsNoTracking();
             return new AccountCountsResponse
             {
+                TotalUsers = await users.CountAsync(),
                 TotalStaffUsers = await users.CountAsync(u => _context.UserRoles.Any(ur =>
                     ur.UserId == u.Id && _context.Roles.Any(r => r.Id == ur.RoleId &&
                         (r.Name == nameof(Role.HeadAdmin) || r.Name == nameof(Role.AdminOfficer) ||
@@ -67,9 +68,9 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             };
         }
 
-        public async Task<List<UserSummaryResponse>> GetUserSummariesAsync(int offset, int limit, UserSummaryFilter filters)
+        public async Task<List<UserSummaryResponse>> GetUserSummariesAsync(int offset, int limit, UserSummaryFilter filters, int excludedUserId)
         {
-            return await ApplyUserSummaryFilters(_context.Users.AsNoTracking(), filters)
+            return await ApplyUserSummaryFilters(_context.Users.AsNoTracking().Where(u => u.Id != excludedUserId), filters)
                 .OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ThenBy(u => u.Id)
                 .Skip(offset)
                 .Take(limit + 1)
@@ -97,8 +98,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-        public Task<int> GetUserSummariesCountAsync(UserSummaryFilter filters)
-            => ApplyUserSummaryFilters(_context.Users.AsNoTracking(), filters).CountAsync();
+        public Task<int> GetUserSummariesCountAsync(UserSummaryFilter filters, int excludedUserId)
+            => ApplyUserSummaryFilters(_context.Users.AsNoTracking().Where(u => u.Id != excludedUserId), filters).CountAsync();
 
         private IQueryable<User> ApplyUserSummaryFilters(IQueryable<User> query, UserSummaryFilter filters)
         {

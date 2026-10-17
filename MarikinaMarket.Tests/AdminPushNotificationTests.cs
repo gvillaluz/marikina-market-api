@@ -19,7 +19,7 @@ public class AdminPushNotificationTests
         userStub.Tokens = ["browser-token-1", "browser-token-2"];
         var push = DispatchProxy.Create<IPushNotificationService, PushSenderStub>();
         var pushStub = (PushSenderStub)(object)push;
-        var service = new NotificationService(push, null!, users, null!);
+        var service = new NotificationService(push, null!, users, null!, null!);
 
         var sent = await service.SendPushNotificationToAdminsAsync(
             "New vendor registration request", "Business submitted a request.",
@@ -36,7 +36,7 @@ public class AdminPushNotificationTests
         var users = DispatchProxy.Create<IUserRepository, AdminTokenRepositoryStub>();
         var push = DispatchProxy.Create<IPushNotificationService, PushSenderStub>();
         var pushStub = (PushSenderStub)(object)push;
-        var service = new NotificationService(push, null!, users, null!);
+        var service = new NotificationService(push, null!, users, null!, null!);
 
         var sent = await service.SendPushNotificationToAdminsAsync("title", "body");
 
@@ -49,7 +49,7 @@ public class AdminPushNotificationTests
     {
         var method = typeof(UserController).GetMethod(nameof(UserController.RegisterDeviceToken))!;
         var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
-        Assert.Equal("HeadAdmin,AdminOfficer,MarketEnforcer", authorize?.Roles);
+        Assert.Equal("HeadAdmin,AdminOfficer,MarketEnforcer,MarketVendor", authorize?.Roles);
     }
 
     public class AdminTokenRepositoryStub : DispatchProxy

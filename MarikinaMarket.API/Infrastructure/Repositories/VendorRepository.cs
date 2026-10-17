@@ -14,6 +14,19 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
 
         public VendorRepository(AppDbContext context) => _context = context;
 
+        public async Task<VendorProfile?> GetVendorProfileByUserIdAsync(int userId)
+            => await _context.VendorProfiles.AsNoTracking()
+                .Include(vendor => vendor.MarketSection)
+                .FirstOrDefaultAsync(vendor => vendor.UserId == userId);
+
+        public async Task<int?> GetVendorIdByUserIdAsync(int userId)
+            => await _context.VendorProfiles.AsNoTracking().Where(vendor => vendor.UserId == userId)
+                .Select(vendor => (int?)vendor.Id).FirstOrDefaultAsync();
+
+        public async Task<int?> GetVendorUserIdAsync(int vendorId)
+            => await _context.VendorProfiles.AsNoTracking().Where(vendor => vendor.Id == vendorId)
+                .Select(vendor => (int?)vendor.UserId).FirstOrDefaultAsync();
+
         public async Task<VendorTicketSummary?> GetByIdAsync(int id)
         {
             return await _context.VendorProfiles
@@ -54,16 +67,20 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .FirstOrDefaultAsync(v => v.Id == registrationId);
         }
 
-        public async Task<bool> RegistrationExistsAsync(string email, string businessId)
+        public async Task<bool> RegistrationEmailExistsAsync(string email)
         {
-            var normalizedEmail = email.ToLower();
-            var normalizedBusinessId = businessId.ToLower();
-
+            var normalizedEmail = email.Trim().ToLowerInvariant();
             return await _context.VendorRegistrationRequests.AnyAsync(request =>
-                    request.Email.ToLower() == normalizedEmail ||
-                    request.BusinessId.ToLower() == normalizedBusinessId)
+                request.Email.Trim().ToLower() == normalizedEmail);
+        }
+
+        public async Task<bool> RegistrationBusinessIdExistsAsync(string businessId)
+        {
+            var normalizedBusinessId = businessId.Trim().ToLowerInvariant();
+            return await _context.VendorRegistrationRequests.AnyAsync(request =>
+                    request.BusinessId.Trim().ToLower() == normalizedBusinessId)
                 || await _context.VendorProfiles.AnyAsync(vendor =>
-                    vendor.BusinessId.ToLower() == normalizedBusinessId);
+                    vendor.BusinessId.Trim().ToLower() == normalizedBusinessId);
         }
 
         public async Task<VendorRegistrationStatusCounts> GetVendorRegistrationStatusCountsAsync()
@@ -319,7 +336,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     TotalPaymentAmount = t.TotalPaymentAmount,
                     CommunityServiceHours = t.CommunityServiceHours,
                     IssuedAt = t.IssuedAt,
-                    DueDate = t.IssuedAt.AddDays(15)
+                    DueDate = t.IssuedAt.AddDays(5)
                 })
                 .ToListAsync();
         }
