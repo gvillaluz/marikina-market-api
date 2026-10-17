@@ -155,7 +155,9 @@ namespace MarikinaMarket.API.Application.Services
                 throw new UnauthorizedAccessException("Account is inactive.");
 
             if (!role.HasValue || !Enum.IsDefined(role.Value) ||
-                (mobile ? role != Role.MarketEnforcer : role == Role.MarketEnforcer))
+                (mobile
+                    ? role is not (Role.MarketEnforcer or Role.MarketVendor)
+                    : role is not (Role.HeadAdmin or Role.AdminOfficer)))
                 throw new UnauthorizedAccessException("Account cannot use this application.");
 
             if (string.IsNullOrWhiteSpace(user.Email) || !new EmailAddressAttribute().IsValid(user.Email))
@@ -184,8 +186,10 @@ namespace MarikinaMarket.API.Application.Services
             }
 
             await _emailService.SendEmailAsync(user.Email!, "Sign-in verification code",
-                $"<h2>Verify your sign-in</h2><p>Your code is <strong>{code}</strong>.</p>" +
-                $"<p>It expires in {LOGIN_OTP_EXPIRY_MINUTES} minutes. If you didn't request it, ignore this email.</p>");
+                $@"<h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">Verify your sign-in</h1>
+                <p style=""margin:0 0 14px;"">Use this verification code to finish signing in:</p>
+                <div style=""background-color:#E9F0F8;border:1px solid #D9E1EC;border-radius:8px;padding:20px;text-align:center;margin:20px 0;""><strong style=""font-size:28px;letter-spacing:6px;color:#0B2D5B;"">{code}</strong></div>
+                <p style=""margin:0 0 14px;"">It expires in {LOGIN_OTP_EXPIRY_MINUTES} minutes. If you didn't request it, ignore this email.</p>");
 
             return CreateLoginOtpResponse(otp, user.Email!, "Code sent.");
         }
@@ -394,7 +398,7 @@ namespace MarikinaMarket.API.Application.Services
                 throw new SessionExpiredException("Invalid access token. Please log in again.");
 
             var userRole = await _repository.GetRoleAsync(user);
-            if (userRole == Role.MarketEnforcer)
+            if (userRole is not (Role.HeadAdmin or Role.AdminOfficer))
                 throw new UnauthorizedAccessException("This account is not allowed to use the web application.");
 
             return new LoginResponse
@@ -514,22 +518,19 @@ namespace MarikinaMarket.API.Application.Services
             if (string.Equals(request.Channel, "email", StringComparison.OrdinalIgnoreCase))
             {
                 var emailBody = $@"
-                <div style=""font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;"">
-                    <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina Public Market Inspection System</h2>
-                    <p style=""color: #666; margin-top: 0;"">Password Reset Request</p>
+                    <h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">Password Reset Request</h1>
 
-                    <p>Hello,</p>
-                    <p>We received a request to reset the password for your account. Use the verification code below to continue:</p>
+                    <p style=""margin:0 0 14px;"">Hello,</p>
+                    <p style=""margin:0 0 14px;"">We received a request to reset the password for your account. Use the verification code below to continue:</p>
 
-                    <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; text-align: center; margin: 24px 0;"">
-                        <span style=""font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #0F3D7A;"">{otp}</span>
+                    <div style=""background: #E9F0F8; border-radius: 8px; padding: 16px; text-align: center; margin: 24px 0;"">
+                        <span style=""font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #0B2D5B;"">{otp}</span>
                     </div>
 
-                    <p>This code will expire in <strong>{codeExpiryMinutes} minutes</strong>.</p>
-                    <p>If you didn't request a password reset, you can safely ignore this email — your password will remain unchanged.</p>
+                    <p style=""margin:0 0 14px;"">This code will expire in <strong>{codeExpiryMinutes} minutes</strong>.</p>
+                    <p style=""margin:0 0 14px;"">If you didn't request a password reset, you can safely ignore this email — your password will remain unchanged.</p>
 
-                    <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message, please do not reply.</p>
-                </div>";
+                ";
 
                 await _emailService.SendEmailAsync(
                     user.Email!,

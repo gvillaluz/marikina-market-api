@@ -13,8 +13,8 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
         Task RevokeRefreshTokenAsync(string refreshToken);
         Task DeleteOldTokensAsync(DateTime cutoff, CancellationToken cancellationToken = default);
         Task<AccountCountsResponse> GetAccountCountsAsync();
-        Task<List<UserSummaryResponse>> GetUserSummariesAsync(int offset, int limit, UserSummaryFilter filters);
-        Task<int> GetUserSummariesCountAsync(UserSummaryFilter filters);
+        Task<List<UserSummaryResponse>> GetUserSummariesAsync(int offset, int limit, UserSummaryFilter filters, int excludedUserId);
+        Task<int> GetUserSummariesCountAsync(UserSummaryFilter filters, int excludedUserId);
         Task<User?> FindByUserNameAsync(string userName);
         Task<User?> FindByEmailAsync(string email);
         Task<IdentityResult> CreateUserAsync(User user, string password);

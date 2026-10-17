@@ -40,7 +40,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         }
 
         [HttpPost("device-token")]
-        [Authorize(Roles = nameof(Role.HeadAdmin) + "," + nameof(Role.AdminOfficer) + "," + nameof(Role.MarketEnforcer))]
+        [Authorize(Roles = nameof(Role.HeadAdmin) + "," + nameof(Role.AdminOfficer) + "," + nameof(Role.MarketEnforcer) + "," + nameof(Role.MarketVendor))]
         public async Task<IActionResult> RegisterDeviceToken([FromBody] RegisterDeviceTokenRequest request)
         {
             var userId = GetUserIdFromClaims();

@@ -419,6 +419,16 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("ticket_id");
 
+                    b.Property<int>("VendorId")
+                        .HasColumnType("integer")
+                        .HasColumnName("vendor_id");
+
+                    b.Property<bool>("VendorIsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("vendor_is_read");
+
                     b.HasKey("Id")
                         .HasName("pk_notifications");
 
@@ -427,6 +437,10 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
 
                     b.HasIndex("TicketId")
                         .HasDatabaseName("ix_notifications_ticket_id");
+
+                    b.HasIndex("VendorId", "CreatedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("ix_notifications_vendor_id_created_at_id");
 
                     b.ToTable("notifications", (string)null);
                 });
@@ -1574,9 +1588,18 @@ namespace MarikinaMarket.API.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_notifications_tickets_ticket_id");
 
+                    b.HasOne("MarikinaMarket.API.Domain.Entities.VendorProfile", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notifications_vendor_profiles_vendor_id");
+
                     b.Navigation("Enforcer");
 
                     b.Navigation("Ticket");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("MarikinaMarket.API.Domain.Entities.OrdinancePenaltyTier", b =>

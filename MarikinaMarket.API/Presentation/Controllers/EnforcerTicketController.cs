@@ -105,10 +105,9 @@ namespace MarikinaMarket.API.Presentation.Controllers
         {
             if (request == null) return BadRequest("Request body must not be null or empty.");
 
-            foreach (var file in request.TicketEvidenceFiles)
-            {
-                Console.WriteLine($"FILE: {file.FileName}");
-            }
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var enforcerId) || enforcerId <= 0)
+                return Unauthorized();
+            request.EnforcerId = enforcerId;
 
             var ticketResponse = await _service.CreateTicketAsync(request);
 

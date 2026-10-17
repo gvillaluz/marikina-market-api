@@ -6,6 +6,7 @@ using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.DTOs.Vendor.Request;
+using MarikinaMarket.API.Application.DTOs.Vendor.Response;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 
@@ -13,6 +14,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Repositories
 {
     public interface ITicketRepository
     {
+        Task<List<VendorDashboardTaskResponse>> GetVendorDashboardTasksAsync(int userId);
         Task<List<VendorInspectionSummary>> GetVendorInspectionsAsync(
             int userId, int offset, int limit, VendorInspectionFilters filters);
         Task<int> GetVendorInspectionCountAsync(int userId, VendorInspectionFilters filters);

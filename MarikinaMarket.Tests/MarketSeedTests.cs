@@ -36,11 +36,11 @@ public class MarketSeedTests
         using var context = CreateContext();
         Assert.False(context.Database.HasPendingModelChanges());
         var assembly = context.GetService<IMigrationsAssembly>();
-        var replacement = Assert.Single(assembly.Migrations, pair =>
-            string.CompareOrdinal(pair.Key, "20261012035730_AddedReportsEntity") > 0);
+        const string catalogMigration = "20261013080207_UpdateOrdinancesAndPenalties";
+        var replacement = Assert.Single(assembly.Migrations, pair => pair.Key == catalogMigration);
         var operations = assembly.CreateMigration(replacement.Value, context.Database.ProviderName!).UpOperations;
         Assert.All(operations, operation => Assert.IsType<SqlOperation>(operation));
-        var sql = context.GetService<IMigrator>().GenerateScript("20261012035730_AddedReportsEntity");
+        var sql = context.GetService<IMigrator>().GenerateScript("20261012035730_AddedReportsEntity", catalogMigration);
         foreach (var table in new[] { "AspNetUsers", "AspNetUserRoles", "vendor_profiles",
             "vendor_registration_requests", "tickets", "ticket_violations", "community_service_logs", "shared." })
             Assert.DoesNotContain(table, sql);

@@ -374,6 +374,12 @@ internal sealed class VendorTicketQueryProvider(IQueryProvider inner, VendorTick
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (typeof(TResult) == typeof(Task<int>)) return (TResult)(object)Task.FromResult(inner.Execute<int>(expression));
+        if (typeof(TResult) == typeof(Task<bool>)) return (TResult)(object)Task.FromResult(inner.Execute<bool>(expression));
+        if (typeof(TResult) == typeof(Task<int?>)) return (TResult)(object)Task.FromResult(inner.Execute<int?>(expression));
+        if (typeof(TResult) == typeof(Task<Notification>))
+            return (TResult)(object)Task.FromResult(inner.Execute<Notification?>(expression));
+        if (typeof(TResult) == typeof(Task<VendorRegistrationRequest>))
+            return (TResult)(object)Task.FromResult(inner.Execute<VendorRegistrationRequest?>(expression));
         if (typeof(TResult) == typeof(Task<TicketDetailResponse>))
             return (TResult)(object)Task.FromResult(inner.Execute<TicketDetailResponse?>(expression));
         if (typeof(TResult) == typeof(Task<Ticket>))

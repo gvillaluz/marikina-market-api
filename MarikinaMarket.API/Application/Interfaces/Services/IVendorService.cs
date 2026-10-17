@@ -8,6 +8,9 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
 {
     public interface IVendorService
     {
+        Task<VendorDashboardResponse> GetOwnDashboardAsync(int userId);
+        public Task<VendorSelfProfileResponse> GetOwnProfileAsync(int userId);
+        public Task<VendorSelfProfileResponse> UpdateOwnProfileAsync(int userId, EditUserRequest request);
         public Task<RegisterVendorResponse> CreateVendorRegistryAsync(RegisterVendorRequest request);
         public Task<RegistrationApprovalResponse> CreateAdminVendorRegistrationAsync(
             AdminRegisterVendorRequest request,

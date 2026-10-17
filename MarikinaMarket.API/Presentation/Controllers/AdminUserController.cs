@@ -17,6 +17,22 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
         public AdminUserController(IAdminUserService service) => _service = service;
 
+        [HttpGet("{userId:int}")]
+        public async Task<ActionResult<AdminAccountDetailsResponse>> GetAccount(int userId)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId) || adminId <= 0)
+                return Unauthorized();
+            return Ok(await _service.GetAccountAsync(userId, adminId));
+        }
+
+        [HttpPut("{userId:int}")]
+        public async Task<ActionResult<AdminAccountDetailsResponse>> UpdateAccount(int userId, [FromBody] UpdateAdminUserRequest request)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId) || adminId <= 0)
+                return Unauthorized();
+            return Ok(await _service.UpdateAccountAsync(userId, request, adminId));
+        }
+
         [HttpPost]
         public async Task<ActionResult<AdminUserResponse>> CreateUser([FromBody] CreateAdminUserRequest request)
         {

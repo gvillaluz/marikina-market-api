@@ -19,6 +19,33 @@ namespace MarikinaMarket.API.Presentation.Controllers
 
         public VendorController(IVendorService service) => _service = service;
 
+        [HttpGet("dashboard")]
+        [Authorize(Roles = nameof(Role.MarketVendor))]
+        public async Task<ActionResult<VendorDashboardResponse>> GetOwnDashboard()
+        {
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId) || userId <= 0)
+                return Unauthorized("Invalid token.");
+            return Ok(await _service.GetOwnDashboardAsync(userId));
+        }
+
+        [HttpGet("profile")]
+        [Authorize(Roles = nameof(Role.MarketVendor))]
+        public async Task<ActionResult<VendorSelfProfileResponse>> GetOwnProfile()
+        {
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId) || userId <= 0)
+                return Unauthorized("Invalid token.");
+            return Ok(await _service.GetOwnProfileAsync(userId));
+        }
+
+        [HttpPut("profile")]
+        [Authorize(Roles = nameof(Role.MarketVendor))]
+        public async Task<ActionResult<VendorSelfProfileResponse>> UpdateOwnProfile([FromBody] EditUserRequest request)
+        {
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId) || userId <= 0)
+                return Unauthorized("Invalid token.");
+            return Ok(await _service.UpdateOwnProfileAsync(userId, request));
+        }
+
         [AllowAnonymous]
         [HttpPost("register")]
         [Consumes("multipart/form-data")]

@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using MarikinaMarket.API.Domain.Enums;
+using MarikinaMarket.API.Application.DTOs.Vendor.Response;
 
 namespace MarikinaMarket.API.Application.DTOs.User.Response
 {
@@ -39,5 +40,8 @@ namespace MarikinaMarket.API.Application.DTOs.User.Response
         public string? ProfileUrl { get; set; }
         [JsonPropertyName("mustChangedPassword")]
         public bool MustChangedPassword { get; set; }
+        [JsonPropertyName("vendor")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public VendorBusinessProfileResponse? Vendor { get; set; }
     }
 }

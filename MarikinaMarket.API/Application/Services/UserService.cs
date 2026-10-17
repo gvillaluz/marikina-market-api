@@ -7,6 +7,7 @@ using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Domain.Enums;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
+using MarikinaMarket.API.Application.DTOs.Vendor.Response;
 
 namespace MarikinaMarket.API.Application.Services
 {
@@ -16,23 +17,28 @@ namespace MarikinaMarket.API.Application.Services
         private readonly IStorageService _storageService;
         private readonly IUnitOfWork? _unitOfWork;
         private readonly IAuditLogService? _auditService;
+        private readonly IVendorRepository? _vendorRepository;
         private const int PAGE_SIZE = 10;
 
         public UserService(
             IUserRepository userRepository, 
-            IStorageService storageService, IUnitOfWork? unitOfWork = null, IAuditLogService? auditService = null)
+            IStorageService storageService, IUnitOfWork? unitOfWork = null, IAuditLogService? auditService = null,
+            IVendorRepository? vendorRepository = null)
         {
             _userRepository = userRepository;
             _storageService = storageService;
             _unitOfWork = unitOfWork;
             _auditService = auditService;
+            _vendorRepository = vendorRepository;
         }
 
         public Task<AccountCountsResponse> GetAccountCountsAsync()
             => _userRepository.GetAccountCountsAsync();
 
-        public async Task<PageResponse<UserSummaryResponse>> GetUserSummariesAsync(int offset, UserSummaryFilter filters)
+        public async Task<PageResponse<UserSummaryResponse>> GetUserSummariesAsync(int offset, UserSummaryFilter filters, int excludedUserId)
         {
+            if (excludedUserId <= 0)
+                throw new UnauthorizedAccessException("Invalid admin identity.");
             if (offset < 0)
                 throw new ValidationException("Offset must be zero or greater.");
 
@@ -44,8 +50,8 @@ namespace MarikinaMarket.API.Application.Services
             if (filters.Search?.Length > 200)
                 throw new ValidationException("Search term must be 200 characters or fewer.");
 
-            var users = await _userRepository.GetUserSummariesAsync(offset, PAGE_SIZE, filters);
-            var total = await _userRepository.GetUserSummariesCountAsync(filters);
+            var users = await _userRepository.GetUserSummariesAsync(offset, PAGE_SIZE, filters, excludedUserId);
+            var total = await _userRepository.GetUserSummariesCountAsync(filters, excludedUserId);
             var hasMore = users.Count > PAGE_SIZE;
             if (hasMore)
                 users.RemoveAt(users.Count - 1);
@@ -92,6 +98,9 @@ namespace MarikinaMarket.API.Application.Services
         private async Task<UserProfileResponse> BuildUserProfileResponseAsync(User user)
         {
             var role = await _userRepository.GetRoleAsync(user);
+            var vendor = role == Role.MarketVendor && _vendorRepository is not null
+                ? await _vendorRepository.GetVendorProfileByUserIdAsync(user.Id)
+                : null;
             var profileUrl = string.IsNullOrWhiteSpace(user.ProfilePictureUrl)
                 ? null
                 : await _storageService.GetPresignedUrlAsync(B2BucketType.General, user.ProfilePictureUrl);
@@ -114,7 +123,8 @@ namespace MarikinaMarket.API.Application.Services
                 Role = role,
                 ProfileUrl = profileUrl,
                 CreatedAt = user.CreatedAt,
-                MustChangedPassword = user.MustChangePassword
+                MustChangedPassword = user.MustChangePassword,
+                Vendor = vendor is null ? null : VendorBusinessProfileResponse.FromEntity(vendor)
             };
         }
 

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Identity;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Encodings.Web;
 using System.Security.Cryptography;
+using System.Globalization;
 using MarikinaMarket.API.Application.DTOs.Audits.Internal;
 
 namespace MarikinaMarket.API.Application.Services
@@ -28,6 +29,8 @@ namespace MarikinaMarket.API.Application.Services
         private readonly ILogger<VendorService> _logger;
         private readonly AuditLogContext? _audit;
         private readonly IAuditLogService? _auditService;
+        private readonly IUserService? _userService;
+        private readonly ITicketRepository? _ticketRepository;
 
         public VendorService(
             IUserRepository userRepository, 
@@ -38,7 +41,8 @@ namespace MarikinaMarket.API.Application.Services
             IStorageService storageService,
             IEmailService emailService,
             INotificationService notificationService,
-            ILogger<VendorService> logger, AuditLogContext? audit = null, IAuditLogService? auditService = null)
+            ILogger<VendorService> logger, AuditLogContext? audit = null, IAuditLogService? auditService = null,
+            IUserService? userService = null, ITicketRepository? ticketRepository = null)
         {
             _userRepository = userRepository;
             _vendorRepository = vendorRepository;
@@ -51,10 +55,69 @@ namespace MarikinaMarket.API.Application.Services
             _logger = logger;
             _audit = audit;
             _auditService = auditService;
+            _userService = userService;
+            _ticketRepository = ticketRepository;
         }
+
+        public async Task<VendorDashboardResponse> GetOwnDashboardAsync(int userId)
+        {
+            var vendor = await GetOwnVendorAsync(userId);
+            var tickets = _ticketRepository ?? throw new InvalidOperationException("Ticket repository is required for the vendor dashboard.");
+            return new VendorDashboardResponse
+            {
+                TotalWarnings = await tickets.GetVendorInspectionCountAsync(userId, new() { Type = ViolationType.Warning }),
+                TotalTickets = await tickets.GetVendorInspectionCountAsync(userId, new() { Type = ViolationType.Ticket }),
+                Tasks = await tickets.GetVendorDashboardTasksAsync(userId),
+                Compliance = await GetVendorComplianceScoreAsync(vendor.Id)
+            };
+        }
+
+        public async Task<VendorSelfProfileResponse> GetOwnProfileAsync(int userId)
+        {
+            var vendor = await GetOwnVendorAsync(userId);
+            var userService = _userService ?? throw new InvalidOperationException("User service is required for vendor profiles.");
+            var user = await userService.GetUserInfoAsync(userId);
+            if (user.Role != Role.MarketVendor)
+                throw new UnauthorizedAccessException("Vendor access is required.");
+            return BuildOwnProfile(user, vendor);
+        }
+
+        public async Task<VendorSelfProfileResponse> UpdateOwnProfileAsync(int userId, EditUserRequest request)
+        {
+            var vendor = await GetOwnVendorAsync(userId);
+            var userService = _userService ?? throw new InvalidOperationException("User service is required for vendor profiles.");
+            var user = await userService.GetUserInfoAsync(userId);
+            if (user.Role != Role.MarketVendor)
+                throw new UnauthorizedAccessException("Vendor access is required.");
+            var updated = await userService.UpdateUserInfo(request, userId);
+            return BuildOwnProfile(updated, vendor);
+        }
+
+        private async Task<VendorProfile> GetOwnVendorAsync(int userId)
+        {
+            if (userId <= 0)
+                throw new ValidationException("User ID must be greater than zero.");
+            return await _vendorRepository.GetVendorProfileByUserIdAsync(userId)
+                ?? throw new RecordNotFoundException("Vendor profile not found.");
+        }
+
+        private static VendorSelfProfileResponse BuildOwnProfile(
+            MarikinaMarket.API.Application.DTOs.User.Response.UserProfileResponse user, VendorProfile vendor)
+            => new()
+            {
+                User = user,
+                Vendor = VendorBusinessProfileResponse.FromEntity(vendor)
+            };
 
         public async Task<RegisterVendorResponse> CreateVendorRegistryAsync(RegisterVendorRequest request)
         {
+            request.Email = request.Email?.Trim() ?? "";
+            request.BusinessId = request.BusinessId?.Trim() ?? "";
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+
+            if (request.VendorType == VendorType.Public && string.IsNullOrWhiteSpace(request.StallNumber))
+                throw new ValidationException("Stall number is required for public vendors.");
+
             ValidateDocumentFile(request.GovernmentIdPhoto, "Government ID photo");
             ValidateDocumentFile(request.BusinessDocumentPhoto, "Business document photo");
 
@@ -67,13 +130,7 @@ namespace MarikinaMarket.API.Application.Services
             if (dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow))
                 throw new ValidationException("Date of birth cannot be in the future.");
 
-            var user = await _userRepository.FindByEmailAsync(request.Email);
-
-            if (user is not null)
-                throw new InvalidRequestException("Email is already registered.");
-
-            if (await _vendorRepository.RegistrationExistsAsync(request.Email, request.BusinessId))
-                throw new InvalidRequestException("A registration request already exists for this email address or business ID.");
+            await ValidateRegistrationIdentityAsync(request.Email, request.BusinessId);
 
             var marketSection = await _marketSectionRepository.GetById(request.MarketSectionId);
 
@@ -161,16 +218,14 @@ namespace MarikinaMarket.API.Application.Services
             var encodedName = HtmlEncoder.Default.Encode(savedVendorRegistry.FirstName);
             var encodedBusinessName = HtmlEncoder.Default.Encode(savedVendorRegistry.BusinessName);
             var emailBody = $@"
-                <div style=""font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#333;"">
-                    <h2 style=""color:#0F3D7A;"">Registration request received</h2>
-                    <p>Hello {encodedName},</p>
-                    <p>We received the vendor registration request for <strong>{encodedBusinessName}</strong>.</p>
-                    <p>Your request is pending review. We will email you after an administrator reaches a decision.</p>
-                    <p style=""color:#777;font-size:12px;margin-top:28px;"">This is an automated message. Please do not reply.</p>
-                </div>";
+                    <h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">Registration request received</h1>
+                    <p style=""margin:0 0 14px;"">Hello {encodedName},</p>
+                    <p style=""margin:0 0 14px;"">We received the vendor registration request for <strong>{encodedBusinessName}</strong>.</p>
+                    <p style=""margin:0 0 14px;"">Your request is pending review. We will email you after an administrator reaches a decision.</p>
+                ";
 
-            await _emailService.SendEmailAsync(
-                savedVendorRegistry.Email,
+            var emailSent = await SendReviewEmailAsync(
+                savedVendorRegistry,
                 "Vendor Registration Request Received",
                 emailBody);
 
@@ -181,7 +236,9 @@ namespace MarikinaMarket.API.Application.Services
                 BusinessName = savedVendorRegistry.BusinessName,
                 EmailAddress = savedVendorRegistry.Email,
                 Status = savedVendorRegistry.Status.ToString(),
-                Message = "Registration successful! Your account has been submitted for review. You'll be able to sign in once an administrator approves your account."
+                Message = emailSent
+                    ? "Registration successful! Your account has been submitted for review. You'll be able to sign in once an administrator approves your account."
+                    : "Registration successful! Your account has been submitted for review, but we couldn't send the confirmation email. Contact the market administration office for assistance."
             };
         }
 
@@ -189,6 +246,10 @@ namespace MarikinaMarket.API.Application.Services
             AdminRegisterVendorRequest request,
             int adminId)
         {
+            request.Email = request.Email?.Trim() ?? "";
+            request.BusinessId = request.BusinessId?.Trim() ?? "";
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+
             var dateOfBirth = request.DateOfBirth
                 ?? throw new ValidationException("Birth date is required.");
             var vendorType = request.VendorType
@@ -197,11 +258,7 @@ namespace MarikinaMarket.API.Application.Services
             if (dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow))
                 throw new ValidationException("Date of birth cannot be in the future.");
 
-            if (await _userRepository.FindByEmailAsync(request.Email) is not null)
-                throw new InvalidRequestException("Email is already registered.");
-
-            if (await _vendorRepository.RegistrationExistsAsync(request.Email, request.BusinessId))
-                throw new InvalidRequestException("A registration request already exists for this email address or business ID.");
+            await ValidateRegistrationIdentityAsync(request.Email, request.BusinessId);
 
             if (await _marketSectionRepository.GetById(request.MarketSectionId) is null)
                 throw new RecordNotFoundException("Selected market section was not found.");
@@ -287,8 +344,14 @@ namespace MarikinaMarket.API.Application.Services
 
                 ValidateReviewVersion(registration, request.Version);
 
-                if (registration.Status != RequestStatus.Pending)
+                if (registration.Status is not (RequestStatus.Pending or RequestStatus.NeedsInformation))
                     throw new AlreadyProcessedException("This request has already been processed.");
+
+                var sequence = await _userRepository.GetNextUserNameAsync();
+                if (!int.TryParse(sequence, NumberStyles.None, CultureInfo.InvariantCulture, out var sequenceNumber)
+                    || sequenceNumber < 1 || sequenceNumber > 9999)
+                    throw new InvalidRequestException("Cannot create a vendor username: the shared sequence must be between 1 and 9999. Contact an administrator.");
+                var username = $"VEN{sequenceNumber.ToString("D4", CultureInfo.InvariantCulture)}-{DateTime.UtcNow.Year}";
 
                 registration.Status = request.RequestStatus;
                 registration.ReviewedAt = DateTime.UtcNow;
@@ -301,7 +364,7 @@ namespace MarikinaMarket.API.Application.Services
                     LastName = registration.LastName,
                     DateOfBirth = registration.DateOfBirth,
                     Email = registration.Email,
-                    UserName = await _userRepository.GetNextUserNameAsync(),
+                    UserName = username,
                     PasswordHash = registration.Password,
                     Status = AccountStatus.Active,
                     PhoneNumber = registration.PhoneNumber,
@@ -347,14 +410,7 @@ namespace MarikinaMarket.API.Application.Services
                 await _unitOfWork.CommitAsync();
                 transactionCommitted = true;
 
-                var emailBody = $@"
-                    <div style=""font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#333;"">
-                        <h2 style=""color:#0F3D7A;"">Your vendor registration was approved</h2>
-                        <p>Hello {HtmlEncoder.Default.Encode(registration.FirstName)},</p>
-                        <p>Your registration for <strong>{HtmlEncoder.Default.Encode(registration.BusinessName)}</strong> has been approved.</p>
-                        <p>You can now sign in using the email address and password you provided during registration.</p>
-                        <p style=""color:#777;font-size:12px;margin-top:28px;"">This is an automated message. Please do not reply.</p>
-                    </div>";
+                var emailBody = CreateReviewEmail(registration, newUser.UserName);
 
                 var emailSent = await SendReviewEmailAsync(
                     registration, "Vendor Registration Approved", emailBody);
@@ -410,7 +466,7 @@ namespace MarikinaMarket.API.Application.Services
 
                 ValidateReviewVersion(registration, request.Version);
 
-                if (registration.Status != RequestStatus.Pending)
+                if (registration.Status is not (RequestStatus.Pending or RequestStatus.NeedsInformation))
                     throw new AlreadyProcessedException("This request has already been processed.");
 
                 if (string.IsNullOrWhiteSpace(request.ReviewReason))
@@ -431,19 +487,10 @@ namespace MarikinaMarket.API.Application.Services
                 await _unitOfWork.CommitAsync();
                 transactionCommitted = true;
 
-                var emailBody = $@"
-                    <div style=""font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#333;"">
-                        <h2 style=""color:#0F3D7A;"">Update on your vendor registration</h2>
-                        <p>Hello {HtmlEncoder.Default.Encode(registration.FirstName)},</p>
-                        <p>We are unable to approve the registration for <strong>{HtmlEncoder.Default.Encode(registration.BusinessName)}</strong> at this time.</p>
-                        <p><strong>Reason:</strong> {HtmlEncoder.Default.Encode(registration.ReviewReason)}</p>
-                        <p>{HtmlEncoder.Default.Encode(registration.ReviewRemarks)}</p>
-                        <p>If you have questions, please contact the market administration office.</p>
-                        <p style=""color:#777;font-size:12px;margin-top:28px;"">This is an automated message. Please do not reply.</p>
-                    </div>";
+                var emailBody = CreateReviewEmail(registration);
 
                 var emailSent = await SendReviewEmailAsync(
-                    registration, "Vendor Registration Update", emailBody);
+                    registration, "Vendor Registration Rejected", emailBody);
 
                 return new RegistrationDeclinedResponse
                 {
@@ -515,15 +562,7 @@ namespace MarikinaMarket.API.Application.Services
                 await _unitOfWork.CommitAsync();
                 transactionCommitted = true;
 
-                var emailBody = $@"
-                    <div style=""font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#333;"">
-                        <h2 style=""color:#0F3D7A;"">More information is required</h2>
-                        <p>Hello {HtmlEncoder.Default.Encode(registration.FirstName)},</p>
-                        <p>More information is required before your registration for <strong>{HtmlEncoder.Default.Encode(registration.BusinessName)}</strong> can continue.</p>
-                        <p><strong>Reason:</strong> {HtmlEncoder.Default.Encode(registration.ReviewReason)}</p>
-                        <p>{HtmlEncoder.Default.Encode(registration.ReviewRemarks)}</p>
-                        <p style=""color:#777;font-size:12px;margin-top:28px;"">This is an automated message. Please do not reply.</p>
-                    </div>";
+                var emailBody = CreateReviewEmail(registration);
 
                 var emailSent = await SendReviewEmailAsync(
                     registration, "More Information Required for Vendor Registration", emailBody);
@@ -569,12 +608,77 @@ namespace MarikinaMarket.API.Application.Services
             _vendorRepository.SetOriginalVersion(registration, version);
         }
 
+        private async Task ValidateRegistrationIdentityAsync(string email, string businessId)
+        {
+            if (await _userRepository.FindByEmailAsync(email) is not null)
+                throw new InvalidRequestException("Email is already registered.");
+
+            if (await _vendorRepository.RegistrationEmailExistsAsync(email))
+                throw new InvalidRequestException("A vendor registration request already uses this email address. Check your existing request or contact the market administration office.");
+
+            if (await _vendorRepository.RegistrationBusinessIdExistsAsync(businessId))
+                throw new InvalidRequestException("Business ID is already used by a vendor or registration request.");
+        }
+
+        private static string CreateReviewEmail(VendorRegistrationRequest registration, string? username = null)
+        {
+            var (heading, status, statusColor, message, nextStep) = registration.Status switch
+            {
+                RequestStatus.Approved => (
+                    "Your vendor registration is approved", "APPROVED", "#4C8B5A",
+                    "Your registration has been approved. Your vendor account is ready to use.",
+                    "Open the Marikina Market mobile app and sign in with your username and the password you provided during registration."),
+                RequestStatus.Rejected => (
+                    "Your vendor registration was rejected", "REJECTED", "#C0392B",
+                    "We are unable to approve your registration at this time. Please review the reason and remarks below.",
+                    "If you have questions about this decision, please contact the market administration office."),
+                RequestStatus.NeedsInformation => (
+                    "More information is needed", "NEEDS INFORMATION", "#B8792F",
+                    "We need additional information before we can complete the review of your registration.",
+                    "Please prepare the information or documents described in the remarks and contact the market administration office for instructions on providing them."),
+                _ => throw new InvalidRequestException("Invalid registration review status.")
+            };
+
+            var rows = ReviewEmailRow("Store name", registration.BusinessName)
+                + ReviewEmailRow("Registered email", registration.Email);
+            rows += registration.Status == RequestStatus.Approved
+                ? ReviewEmailRow("Username", username)
+                : ReviewEmailRow("Reason", registration.ReviewReason)
+                    + ReviewEmailRow("Remarks", registration.ReviewRemarks);
+
+            return $@"
+          <p style=""margin:0 0 14px;color:{statusColor};font-size:11px;letter-spacing:1px;font-weight:bold;"">{status}</p>
+          <h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">{heading}</h1>
+          <p style=""margin:0 0 12px;font-size:15px;line-height:1.7;"">Hello {HtmlEncoder.Default.Encode(registration.FirstName)},</p>
+          <p style=""margin:0 0 22px;font-size:15px;line-height:1.7;"">{message}</p>
+          <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color:#E9F0F8;border:1px solid #D9E1EC;border-radius:8px;table-layout:fixed;"">{rows}</table>
+          <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""margin-top:24px;""><tr><td style=""padding:16px 18px;border-left:3px solid {statusColor};background-color:#F8FAFD;"">
+            <p style=""margin:0 0 6px;color:#0B2D5B;font-size:14px;font-weight:bold;"">Next steps</p>
+            <p style=""margin:0;font-size:14px;line-height:1.7;"">{nextStep}</p>
+          </td></tr></table>
+          <p style=""margin:24px 0 0;font-size:14px;line-height:1.7;"">Thank you,<br><strong style=""color:#0B2D5B;"">Marikina City Public Market</strong></p>";
+        }
+
+        private static string ReviewEmailRow(string label, string? value)
+        {
+            var lines = (value ?? "").Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+            var encodedValue = string.Join("<br>", lines.Select(line => HtmlEncoder.Default.Encode(line)));
+            return $@"<tr><td valign=""top"" width=""32%"" style=""padding:14px 12px;border-bottom:1px solid #D9E1EC;color:#5B6472;font-size:13px;line-height:1.6;"">{HtmlEncoder.Default.Encode(label)}</td><td valign=""top"" style=""padding:14px 12px;border-bottom:1px solid #D9E1EC;color:#0B2D5B;font-size:14px;font-weight:bold;line-height:1.6;overflow-wrap:anywhere;word-break:break-word;"">{encodedValue}</td></tr>";
+        }
+
         private async Task<bool> SendReviewEmailAsync(
             VendorRegistrationRequest registration, string subject, string body)
         {
             try
             {
-                await _emailService.SendEmailAsync(registration.Email, subject, body);
+                var accentColor = registration.Status switch
+                {
+                    RequestStatus.Approved => "#4C8B5A",
+                    RequestStatus.Rejected => "#C0392B",
+                    RequestStatus.NeedsInformation => "#B8792F",
+                    _ => "#0B2D5B"
+                };
+                await _emailService.SendEmailAsync(registration.Email, subject, body, accentColor);
                 return true;
             }
             catch (Exception ex)

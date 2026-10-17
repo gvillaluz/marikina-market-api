@@ -11,7 +11,7 @@ namespace MarikinaMarket.API.Application.Interfaces.Services
     public interface IUserService
     {
         Task<AccountCountsResponse> GetAccountCountsAsync();
-        Task<PageResponse<UserSummaryResponse>> GetUserSummariesAsync(int offset, UserSummaryFilter filters);
+        Task<PageResponse<UserSummaryResponse>> GetUserSummariesAsync(int offset, UserSummaryFilter filters, int excludedUserId);
         Task<UserProfileResponse> GetUserInfoAsync(int userId);
         Task<UserProfileResponse> UpdateUserInfo(EditUserRequest request, int userId);
         Task RegisterDeviceTokenAsync(int userId, string deviceToken);

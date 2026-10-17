@@ -498,7 +498,8 @@ public class AuditServiceTests
         var target = db.GetService<IModelRuntimeInitializer>().Initialize(migration.TargetModel, designTime: true);
         var differences = db.GetService<IMigrationsModelDiffer>().GetDifferences(target.GetRelationalModel(), model.GetRelationalModel());
         Assert.DoesNotContain(differences, op => op.GetType().GetProperty("Table")?.GetValue(op) is "audit_logs");
-        Assert.Empty(differences);
+        // Later migrations may change other tables; compare the full current model to the latest snapshot.
+        Assert.False(db.Database.HasPendingModelChanges());
     }
 
     private static AppDbContext DatabaseModel() => new(new DbContextOptionsBuilder<AppDbContext>()

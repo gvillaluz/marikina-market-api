@@ -28,6 +28,7 @@ namespace MarikinaMarket.API.Application.Services
         private readonly int PAGE_SIZE = 10;
         private readonly AuditLogContext? _audit;
         private readonly IAuditLogService? _auditService;
+        private readonly ILogger<TicketService>? _logger;
 
         public TicketService(
             ITicketRepository ticketRepository,
@@ -37,7 +38,8 @@ namespace MarikinaMarket.API.Application.Services
             IStorageService storageService,
             INotificationService notificationService,
             IVendorComplianceScoreService complianceScoreService,
-            AuditLogContext? audit = null, IAuditLogService? auditService = null
+            AuditLogContext? audit = null, IAuditLogService? auditService = null,
+            ILogger<TicketService>? logger = null
             )
         {
             _ticketRepository = ticketRepository;
@@ -49,6 +51,7 @@ namespace MarikinaMarket.API.Application.Services
             _complianceScoreService = complianceScoreService;
             _audit = audit;
             _auditService = auditService;
+            _logger = logger;
         }
 
         public async Task<MobileDashboardSummaryResponse> GetMobileTicketCountAsync(int enforcerId)
@@ -135,7 +138,7 @@ namespace MarikinaMarket.API.Application.Services
             if (ticket.PenaltyType != PenaltyType.CommunityService)
                 throw new InvalidRequestException("Community service entries are only accepted for community service tickets.");
 
-            ValidateCommunityServiceLog(ticket, request);
+            ValidateCommunityServiceLog(ticket, request, DateTime.UtcNow);
 
             var completedHours = ticket.CommunityServiceLogs.Sum(log => log.HoursWorked);
             var requiredHours = ticket.CommunityServiceHours!.Value;
@@ -220,12 +223,14 @@ namespace MarikinaMarket.API.Application.Services
 
         private static void ValidateCommunityServiceLog(
             Ticket ticket,
-            SubmitCommunityServiceLogRequest request)
+            SubmitCommunityServiceLogRequest request,
+            DateTime utcNow)
         {
             if (!request.ServiceDate.HasValue)
                 throw new InvalidRequestException("Service date is required.");
 
-            if (request.ServiceDate.Value.Date > DateTime.UtcNow.Date)
+            var today = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(utcNow, "Asia/Manila").Date;
+            if (request.ServiceDate.Value.Date > today)
                 throw new InvalidRequestException("Service date cannot be in the future.");
 
             if (!request.HoursWorked.HasValue
@@ -362,7 +367,22 @@ namespace MarikinaMarket.API.Application.Services
 
         public async Task<InspectionSummaryResponse> CreateTicketAsync(CreateTicketRequest request)
         {
+            Validator.ValidateObject(request, new ValidationContext(request), validateAllProperties: true);
+            if (request.EnforcerId <= 0 || !Enum.IsDefined(request.Type) || !Enum.IsDefined(request.PenaltyType))
+                throw new ValidationException("A valid enforcer, inspection type and penalty type are required.");
+            if (request.Type == ViolationType.Ticket)
+            {
+                if (request.TicketEvidenceFiles is null || request.TicketEvidenceFiles.Count == 0
+                    || request.TicketEvidenceFiles.Any(file => file is null || file.Length <= 0))
+                    throw new InvalidRequestException("Photo evidence is required for tickets.");
+                foreach (var file in request.TicketEvidenceFiles)
+                    await ValidateTicketEvidenceAsync(file);
+                if (request.PenaltyType == PenaltyType.CommunityService
+                    && (request.CommunityServiceHours is null || request.CommunityServiceHours < 3))
+                    throw new InvalidRequestException("Community service requires a minimum of 3 hours.");
+            }
             await _unitOfWork.BeginTransactionAsync();
+            var transactionCommitted = false;
 
             try
             {
@@ -437,10 +457,16 @@ namespace MarikinaMarket.API.Application.Services
 
                     await _unitOfWork.SaveChangesAsync();
                     newWarningTicket.ControlNumber = $"WRN-{newWarningTicket.Id:D4}";
+                    await _notificationService.SaveNotificationAsync(newWarningTicket.Id, newWarningTicket.EnforcerId,
+                        newWarningTicket.VendorId, $"A warning ({newWarningTicket.ControlNumber}) was issued for {vendor.BusinessName}.",
+                        TicketStatus.Pending);
                     await _unitOfWork.SaveChangesAsync();
                     if (_audit?.Entry is not null) _audit.Entry.TargetId = warningTicket.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     if (_auditService is not null) await _auditService.StageCurrentAsync();
                     await _unitOfWork.CommitAsync();
+                    transactionCommitted = true;
+                    await SendVendorPushAsync(newWarningTicket, "inspection_submitted", "Warning issued",
+                        $"A warning ({newWarningTicket.ControlNumber}) was issued for {vendor.BusinessName}.");
 
                     if (!string.IsNullOrEmpty(vendor.Email))
                     {
@@ -448,12 +474,10 @@ namespace MarikinaMarket.API.Application.Services
                         var description = WebUtility.HtmlEncode(newWarningTicket.Description)
                             .Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "<br>");
                         string body = $@"
-                            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
-                                <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
-                                <p style=""color: #666; margin-top: 0;"">Notice of Issued Warning</p>
-                                <p>Dear {WebUtility.HtmlEncode(vendor.FirstName)} {WebUtility.HtmlEncode(vendor.LastName)},</p>
-                                <p>A warning has been issued for your stall, <strong>{WebUtility.HtmlEncode(vendor.BusinessName)}</strong>.</p>
-                                <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                    <h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">Notice of Issued Warning</h1>
+                                <p style=""margin:0 0 14px;"">Dear {WebUtility.HtmlEncode(vendor.FirstName)} {WebUtility.HtmlEncode(vendor.LastName)},</p>
+                                <p style=""margin:0 0 14px;"">A warning has been issued for your stall, <strong>{WebUtility.HtmlEncode(vendor.BusinessName)}</strong>.</p>
+                                <div style=""background: #E9F0F8; border-radius: 8px; padding: 16px; margin: 20px 0;"">
                                     <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
                                         <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(newWarningTicket.ControlNumber)}</td></tr>
                                         <tr><td style=""padding: 4px 0; color: #666;"">Date Issued</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{newWarningTicket.IssuedAt:MMMM dd, yyyy - hh:mm tt} UTC</td></tr>
@@ -461,14 +485,21 @@ namespace MarikinaMarket.API.Application.Services
                                     <p style=""margin-bottom: 4px; font-weight: bold;"">Reason for Warning</p>
                                     <p style=""margin-top: 0;"">{description}</p>
                                 </div>
-                                <p>Please address the issues described above promptly. Unresolved issues may lead to a formal citation and corresponding penalties.</p>
-                                <p>If you believe this warning was issued in error, contact the market administration office to file a dispute.</p>
-                                <p>Thank you for your cooperation.</p>
+                                <p style=""margin:0 0 14px;"">Please address the issues described above promptly. Unresolved issues may lead to a formal citation and corresponding penalties.</p>
+                                <p style=""margin:0 0 14px;"">If you believe this warning was issued in error, contact the market administration office to file a dispute.</p>
+                                <p style=""margin:0 0 14px;"">Thank you for your cooperation.</p>
                                 <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
-                                <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
-                            </div>";
+                            ";
 
-                        await _notificationService.SendEmailAsync(vendor.Email, subject, body);
+                        try
+                        {
+                            await _notificationService.SendEmailAsync(vendor.Email, subject, body, "#B8792F");
+                        }
+                        catch (Exception exception)
+                        {
+                            _logger?.LogWarning("Warning email failed for ticket {TicketId}. Error type: {ErrorType}",
+                                newWarningTicket.Id, exception.GetType().Name);
+                        }
                     }
 
                     return new InspectionSummaryResponse
@@ -556,9 +587,15 @@ namespace MarikinaMarket.API.Application.Services
 
                 await _unitOfWork.SaveChangesAsync();
                 await _complianceScoreService.RefreshAsync(vendor.Id, DateTime.UtcNow);
+                await _notificationService.SaveNotificationAsync(newTicket.Id, newTicket.EnforcerId, newTicket.VendorId,
+                    $"A violation ticket ({newTicket.ControlNumber}) was issued for {vendor.BusinessName}.", TicketStatus.Pending);
+                await _unitOfWork.SaveChangesAsync();
                 if (_audit?.Entry is not null) _audit.Entry.TargetId = newTicket.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 if (_auditService is not null) await _auditService.StageCurrentAsync();
                 await _unitOfWork.CommitAsync();
+                transactionCommitted = true;
+                await SendVendorPushAsync(newTicket, "inspection_submitted", "Violation ticket issued",
+                    $"A violation ticket ({newTicket.ControlNumber}) was issued for {vendor.BusinessName}.");
 
                 if (!string.IsNullOrEmpty(vendor.Email))
                 {
@@ -567,31 +604,37 @@ namespace MarikinaMarket.API.Application.Services
                     var businessName = WebUtility.HtmlEncode(vendor.BusinessName);
 
                     string subject = $"Notice of Violation Ticket - Control No. {newTicket.ControlNumber}";
+                    var dueDate = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(newTicket.IssuedAt.AddDays(5), "Asia/Manila");
                     string body = $@"
-                        <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
-                            <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
-                            <p style=""color: #666; margin-top: 0;"">Notice of Violation Ticket</p>
+                    <h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">Notice of Violation Ticket</h1>
 
-                            <p>Dear {firstName} {lastName},</p>
-                            <p>A violation ticket has been issued for your stall, <strong>{businessName}</strong>. Please review the details below.</p>
+                            <p style=""margin:0 0 14px;"">Dear {firstName} {lastName},</p>
+                            <p style=""margin:0 0 14px;"">A violation ticket has been issued for your stall, <strong>{businessName}</strong>. Please review the details below.</p>
 
-                            <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                            <div style=""background: #E9F0F8; border-radius: 8px; padding: 16px; margin: 20px 0;"">
                                 <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
                                     <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(newTicket.ControlNumber)}</td></tr>
                                     {BuildPenaltyEmailRows(newTicket)}
-                                    <tr><td style=""padding: 4px 0; color: #666;"">Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{newTicket.IssuedAt.AddDays(15):MMMM dd, yyyy}</td></tr>
+                                    <tr><td style=""padding: 4px 0; color: #666;"">Due Date</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{dueDate:MMMM dd, yyyy}</td></tr>
                                 </table>
                             </div>
 
-                            <p>Please complete the required settlement on or before the due date. Submit your receipt or donation proof, or ensure your community service hours are recorded, as applicable.</p>
-                            <p>If you wish to contest this ticket, please visit the market administration office within 15 days of the issue date to file an appeal.</p>
-                            <p>Thank you for your prompt attention to this matter.</p>
+                            <p style=""margin:0 0 14px;"">Please complete the required settlement on or before the due date. Submit your receipt or donation proof, or ensure your community service hours are recorded, as applicable.</p>
+                            <p style=""margin:0 0 14px;"">If you wish to contest this ticket, please visit the market administration office within 5 days of the issue date to file an appeal.</p>
+                            <p style=""margin:0 0 14px;"">Thank you for your prompt attention to this matter.</p>
 
                             <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
-                            <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
-                        </div>";
+                        ";
 
-                    await _notificationService.SendEmailAsync(vendor.Email, subject, body);
+                    try
+                    {
+                        await _notificationService.SendEmailAsync(vendor.Email, subject, body, "#C0392B");
+                    }
+                    catch (Exception exception)
+                    {
+                        _logger?.LogWarning("Ticket email failed for ticket {TicketId}. Error type: {ErrorType}",
+                            newTicket.Id, exception.GetType().Name);
+                    }
                 }
 
                 return new InspectionSummaryResponse
@@ -620,8 +663,29 @@ namespace MarikinaMarket.API.Application.Services
             }
             catch (Exception)
             {
-                await _unitOfWork.RollbackAsync();
+                if (!transactionCommitted) await _unitOfWork.RollbackAsync();
                 throw;
+            }
+        }
+
+        private async Task SendVendorPushAsync(Ticket ticket, string eventType, string title, string message)
+        {
+            var data = new Dictionary<string, string>
+            {
+                ["type"] = eventType,
+                ["ticketId"] = ticket.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["vendorId"] = ticket.VendorId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["inspection_type"] = ticket.Type.ToString()
+            };
+            if (ticket.Status.HasValue) data["status"] = ticket.Status.Value.ToString();
+            try
+            {
+                await _notificationService.SendPushNotificationToVendorAsync(ticket.VendorId, title, message, data);
+            }
+            catch (Exception exception)
+            {
+                _logger?.LogWarning("Vendor push failed for ticket {TicketId}, vendor {VendorId}. Error type: {ErrorType}",
+                    ticket.Id, ticket.VendorId, exception.GetType().Name);
             }
         }
 
@@ -894,6 +958,8 @@ namespace MarikinaMarket.API.Application.Services
             {
                 ticket = await _ticketRepository.GetTicketByIdAsync(ticketId)
                     ?? throw new RecordNotFoundException("Ticket not found.");
+                if (ticket.Version != request.Version)
+                    throw new ConcurrencyConflictException("This ticket was updated by another user. Please refresh and try again.");
                 ValidateTicketSettlement(ticket, request.NewStatus);
                 previousStatus = ticket.Status;
 
@@ -910,6 +976,7 @@ namespace MarikinaMarket.API.Application.Services
                 await _notificationService.SaveNotificationAsync(
                     ticket.Id,
                     ticket.EnforcerId,
+                    ticket.VendorId,
                     $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.",
                     ticket.Status ?? TicketStatus.Pending
                 );
@@ -926,21 +993,22 @@ namespace MarikinaMarket.API.Application.Services
                 throw;
             }
 
-            if (!string.IsNullOrEmpty(ticket?.Vendor?.User?.Email))
+            await SendVendorPushAsync(ticket, "ticket_updated", $"Ticket #{ticket.ControlNumber} updated",
+                $"Your ticket status changed from {previousStatus} to {ticket.Status}.");
+
+            if (!string.IsNullOrEmpty(ticket.Vendor?.User?.Email))
             {
                 var firstName = WebUtility.HtmlEncode(ticket.Vendor.User.FirstName);
                 var lastName = WebUtility.HtmlEncode(ticket.Vendor.User.LastName);
 
                 string subject = $"Ticket Status Update - Control No. {ticket.ControlNumber}";
                 string body = $@"
-            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
-                <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
-                <p style=""color: #666; margin-top: 0;"">Ticket Status Update</p>
+                    <h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">Ticket Status Update</h1>
 
-                <p>Dear {firstName} {lastName},</p>
-                <p>Your ticket status has changed from <strong>{previousStatus}</strong> to <strong>{ticket.Status}</strong>.</p>
+                <p style=""margin:0 0 14px;"">Dear {firstName} {lastName},</p>
+                <p style=""margin:0 0 14px;"">Your ticket status has changed from <strong>{previousStatus}</strong> to <strong>{ticket.Status}</strong>.</p>
 
-                <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                <div style=""background: #E9F0F8; border-radius: 8px; padding: 16px; margin: 20px 0;"">
                     <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
                         <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(ticket.ControlNumber)}</td></tr>
                         <tr><td style=""padding: 4px 0; color: #666;"">Previous Status</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{previousStatus}</td></tr>
@@ -949,21 +1017,43 @@ namespace MarikinaMarket.API.Application.Services
                     </table>
                 </div>
 
-                <p>Please review your ticket details for any remaining requirements. If you have questions about this update, contact the market administration office and provide the control number above.</p>
-                <p>Thank you for your attention to this matter.</p>
+                <p style=""margin:0 0 14px;"">Please review your ticket details for any remaining requirements. If you have questions about this update, contact the market administration office and provide the control number above.</p>
+                <p style=""margin:0 0 14px;"">Thank you for your attention to this matter.</p>
 
                 <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
-                <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
-            </div>";
+            ";
 
-                await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
+                var accentColor = ticket.Status switch
+                {
+                    TicketStatus.Paid or TicketStatus.Cleared or TicketStatus.Waived => "#4C8B5A",
+                    TicketStatus.Overdue => "#C0392B",
+                    TicketStatus.Contested => "#B8792F",
+                    _ => "#0B2D5B"
+                };
+                try
+                {
+                    await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body, accentColor);
+                }
+                catch (Exception exception)
+                {
+                    _logger?.LogWarning("Status email failed for ticket {TicketId}. Error type: {ErrorType}",
+                        ticket.Id, exception.GetType().Name);
+                }
             }
 
-            await _notificationService.SendPushNotificationAsync(
-                ticket!.EnforcerId,
-                $"Ticket #{ticket.ControlNumber} Updated",
-                $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}."
-            );
+            try
+            {
+                await _notificationService.SendPushNotificationAsync(
+                    ticket!.EnforcerId,
+                    $"Ticket #{ticket.ControlNumber} Updated",
+                    $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}."
+                );
+            }
+            catch (Exception exception)
+            {
+                _logger?.LogWarning("Enforcer push failed for ticket {TicketId}. Error type: {ErrorType}",
+                    ticket.Id, exception.GetType().Name);
+            }
 
             return new UpdateStatusResponse
             {
@@ -1164,6 +1254,7 @@ namespace MarikinaMarket.API.Application.Services
                     await _notificationService.SaveNotificationAsync(
                         ticket.Id,
                         ticket.EnforcerId,
+                        ticket.VendorId,
                         $"{ticket.Vendor?.BusinessName} — status changed from {previousStatus} to {ticket.Status}.",
                         TicketStatus.Overdue
                     );
@@ -1191,6 +1282,8 @@ namespace MarikinaMarket.API.Application.Services
             // External delivery failures cannot leave persisted statuses and scores out of sync.
             foreach (var ticket in newlyOverdueTickets)
             {
+                await SendVendorPushAsync(ticket, "ticket_overdue", $"Ticket #{ticket.ControlNumber} overdue",
+                    "Your ticket is overdue. Please review the outstanding settlement requirements.");
                 await _notificationService.SendPushNotificationAsync(
                     ticket.EnforcerId,
                     $"Ticket #{ticket.ControlNumber} Overdue",
@@ -1204,14 +1297,12 @@ namespace MarikinaMarket.API.Application.Services
 
                     string subject = $"Overdue Notice - Control No. {ticket.ControlNumber}";
                     string body = $@"
-                <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; line-height: 1.6;"">
-                    <h2 style=""color: #0F3D7A; margin-bottom: 4px;"">Marikina City Public Market</h2>
-                    <p style=""color: #666; margin-top: 0;"">Overdue Notice</p>
+                    <h1 style=""margin:0 0 22px;color:#0B2D5B;font-size:26px;line-height:1.3;"">Overdue Notice</h1>
 
-                    <p>Dear {firstName} {lastName},</p>
-                    <p>Your ticket is now <strong>overdue</strong>. Please review the outstanding settlement details below.</p>
+                    <p style=""margin:0 0 14px;"">Dear {firstName} {lastName},</p>
+                    <p style=""margin:0 0 14px;"">Your ticket is now <strong>overdue</strong>. Please review the outstanding settlement details below.</p>
 
-                    <div style=""background: #F5F5F5; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                    <div style=""background: #E9F0F8; border-radius: 8px; padding: 16px; margin: 20px 0;"">
                         <table style=""width: 100%; font-size: 14px; border-collapse: collapse;"">
                             <tr><td style=""padding: 4px 0; color: #666;"">Control No.</td><td style=""padding: 4px 0; font-weight: bold; text-align: right;"">{WebUtility.HtmlEncode(ticket.ControlNumber)}</td></tr>
                             {BuildPenaltyEmailRows(ticket)}
@@ -1219,15 +1310,14 @@ namespace MarikinaMarket.API.Application.Services
                         </table>
                     </div>
 
-                    <p>Please complete your required settlement as soon as possible. Submit your receipt or donation proof, or complete and record your remaining community service hours, as applicable.</p>
-                    <p>If you wish to contest this ticket, please visit the market administration office to file an appeal.</p>
-                    <p>Thank you for your prompt attention to this matter.</p>
+                    <p style=""margin:0 0 14px;"">Please complete your required settlement as soon as possible. Submit your receipt or donation proof, or complete and record your remaining community service hours, as applicable.</p>
+                    <p style=""margin:0 0 14px;"">If you wish to contest this ticket, please visit the market administration office to file an appeal.</p>
+                    <p style=""margin:0 0 14px;"">Thank you for your prompt attention to this matter.</p>
 
                     <p style=""margin-top: 24px;"">Sincerely,<br>Market Administration Office</p>
-                    <p style=""color: #999; font-size: 12px; margin-top: 32px;"">This is an automated message. Please do not reply.</p>
-                </div>";
+                ";
 
-                    await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body);
+                    await _notificationService.SendEmailAsync(ticket.Vendor.User.Email, subject, body, "#C0392B");
                 }
             }
 
@@ -1262,6 +1352,25 @@ namespace MarikinaMarket.API.Application.Services
             string fileExtension = Path.GetExtension(file.FileName);
             string datePath = DateTime.UtcNow.ToString("yyyy/MM");
             return $"tickets/{datePath}/{Guid.NewGuid()}{fileExtension}";
+        }
+
+        private static async Task ValidateTicketEvidenceAsync(IFormFile file)
+        {
+            const long maxFileSize = 5 * 1024 * 1024;
+
+            if (file.Length > maxFileSize)
+                throw new InvalidRequestException("Photo evidence files must not exceed 5 MB.");
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (extension is not (".jpg" or ".jpeg")
+                || !string.Equals(file.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidRequestException("Photo evidence must be a JPEG image captured by the camera.");
+
+            using var stream = file.OpenReadStream();
+            var header = new byte[3];
+            var bytesRead = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false);
+            if (bytesRead != header.Length || header[0] != 0xff || header[1] != 0xd8 || header[2] != 0xff)
+                throw new InvalidRequestException("Photo evidence must be a valid JPEG image.");
         }
 
         private static void ValidateSettlementProof(IFormFile? file)

@@ -23,9 +23,13 @@ public class AuthAuditTests
     private const string VerificationBody = "{\"username\":\"user8\",\"password\":\"valid-password-123\",\"code\":\"123456\"}";
 
     [Theory]
-    [InlineData("login", Role.MarketVendor, "Login")]
+    [InlineData("login", Role.AdminOfficer, "Login")]
+    [InlineData("login", Role.HeadAdmin, "Login")]
+    [InlineData("login-mobile", Role.MarketVendor, "LoginMobile")]
     [InlineData("login-mobile", Role.MarketEnforcer, "LoginMobile")]
-    [InlineData("verify-login", Role.MarketVendor, "VerifyLogin")]
+    [InlineData("verify-login", Role.AdminOfficer, "VerifyLogin")]
+    [InlineData("verify-login", Role.HeadAdmin, "VerifyLogin")]
+    [InlineData("verify-login-mobile", Role.MarketVendor, "VerifyLoginMobile")]
     [InlineData("verify-login-mobile", Role.MarketEnforcer, "VerifyLoginMobile")]
     public async Task Login_and_verification_record_the_user_without_a_bearer_token(string route, Role role, string action)
     {
@@ -44,17 +48,47 @@ public class AuthAuditTests
         Assert.DoesNotContain("valid-password", JsonSerializer.Serialize(log));
         if (!route.StartsWith("verify", StringComparison.Ordinal))
             Assert.Equal(8, Assert.Single(fixture.EmailActors).UserId);
+        if (route == "verify-login-mobile")
+        {
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal("opaque-access-token", body.RootElement.GetProperty("access_token").GetString());
+            Assert.Equal("opaque-refresh-token", body.RootElement.GetProperty("refresh_token").GetString());
+        }
     }
 
     [Theory]
-    [InlineData("login")]
-    [InlineData("verify-login")]
+    [InlineData("login", Role.MarketVendor)]
+    [InlineData("verify-login", Role.MarketVendor)]
+    [InlineData("login", Role.MarketEnforcer)]
+    [InlineData("verify-login", Role.MarketEnforcer)]
+    [InlineData("login-mobile", Role.AdminOfficer)]
+    [InlineData("verify-login-mobile", Role.AdminOfficer)]
+    [InlineData("login-mobile", Role.HeadAdmin)]
+    [InlineData("verify-login-mobile", Role.HeadAdmin)]
+    public async Task Accounts_cannot_log_in_or_verify_through_the_other_application(string route, Role role)
+    {
+        var fixture = new AuthAuditFixture(role);
+        await using var host = await fixture.HostAsync();
+        var response = await host.SendAsync(HttpMethod.Post, "/api/Auth/" + route, null,
+            route.StartsWith("verify", StringComparison.Ordinal) ? VerificationBody : LoginBody);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(0, fixture.TokensIssued);
+        Assert.Empty(fixture.EmailActors);
+        var log = Assert.Single(host.Repository.Logs);
+        Assert.Equal(8, log.UserId);
+        Assert.Equal(role, log.Role);
+        Assert.Equal(LogResult.Failed, log.Result);
+    }
+
+    [Theory]
+    [InlineData("login-mobile")]
+    [InlineData("verify-login-mobile")]
     public async Task A_different_authenticated_request_identity_does_not_overwrite_the_login_actor(string route)
     {
         var fixture = new AuthAuditFixture();
         await using var host = await fixture.HostAsync();
         var response = await host.SendAsync(HttpMethod.Post, "/api/Auth/" + route, "HeadAdmin",
-            route == "login" ? LoginBody : VerificationBody);
+            route == "login-mobile" ? LoginBody : VerificationBody);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var log = Assert.Single(host.Repository.Logs);
         Assert.Equal(8, log.UserId);
@@ -62,10 +96,11 @@ public class AuthAuditTests
     }
 
     [Theory]
-    [InlineData("verify-login", Role.MarketVendor, OtpVerificationResult.InvalidCode)]
-    [InlineData("verify-login", Role.MarketVendor, OtpVerificationResult.Expired)]
-    [InlineData("verify-login", Role.MarketVendor, OtpVerificationResult.TooManyAttempts)]
-    [InlineData("verify-login", Role.MarketVendor, OtpVerificationResult.NotFound)]
+    [InlineData("verify-login-mobile", Role.MarketVendor, OtpVerificationResult.InvalidCode)]
+    [InlineData("verify-login-mobile", Role.MarketVendor, OtpVerificationResult.Expired)]
+    [InlineData("verify-login-mobile", Role.MarketVendor, OtpVerificationResult.TooManyAttempts)]
+    [InlineData("verify-login-mobile", Role.MarketVendor, OtpVerificationResult.NotFound)]
+    [InlineData("verify-login", Role.AdminOfficer, OtpVerificationResult.InvalidCode)]
     [InlineData("verify-login-mobile", Role.MarketEnforcer, OtpVerificationResult.InvalidCode)]
     public async Task Failed_OTP_authentication_is_logged_for_the_password_validated_user_without_issuing_a_token(
         string route, Role role, OtpVerificationResult result)
@@ -150,8 +185,11 @@ public class AuthAuditTests
     }
 
     [Theory]
-    [InlineData("refresh-web", Role.MarketVendor, 200)]
+    [InlineData("refresh-web", Role.MarketVendor, 403)]
     [InlineData("refresh-web", Role.MarketEnforcer, 403)]
+    [InlineData("refresh-web", Role.AdminOfficer, 200)]
+    [InlineData("refresh-web", Role.HeadAdmin, 200)]
+    [InlineData("refresh", Role.MarketVendor, 200)]
     [InlineData("refresh", Role.MarketEnforcer, 200)]
     public async Task Refresh_endpoints_do_not_record_audit_entries(string route, Role role, int status)
     {
@@ -160,6 +198,7 @@ public class AuthAuditTests
         var response = await host.SendAsync(HttpMethod.Post, "/api/Auth/" + route, "HeadAdmin",
             route == "refresh" ? "{\"refresh_token\":\"opaque-refresh-token\"}" : "{\"access_token\":\"opaque-access-token\"}");
         Assert.Equal(status, (int)response.StatusCode);
+        Assert.Equal(status == 200 ? 1 : 0, fixture.TokensIssued);
         Assert.Empty(host.Repository.Logs);
     }
 
@@ -168,7 +207,7 @@ public class AuthAuditTests
     {
         var fixture = new AuthAuditFixture() { UseActualEmailService = true };
         await using var host = await fixture.HostAsync();
-        var response = await host.SendAsync(HttpMethod.Post, "/api/Auth/login", "HeadAdmin", LoginBody);
+        var response = await host.SendAsync(HttpMethod.Post, "/api/Auth/login-mobile", "HeadAdmin", LoginBody);
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal(2, host.Repository.Logs.Count);
         Assert.All(host.Repository.Logs, log =>
@@ -308,7 +347,7 @@ internal sealed class AuditEmailCapture : IEmailService
     private readonly AuditLogContext _audit;
     private readonly List<(int? UserId, Role? Role)> _actors;
     public AuditEmailCapture(AuditLogContext audit, List<(int?, Role?)> actors) { _audit = audit; _actors = actors; }
-    public Task SendEmailAsync(string toEmail, string subject, string body)
+    public Task SendEmailAsync(string toEmail, string subject, string body, string accentColor = "#0B2D5B")
     {
         _actors.Add((_audit.Entry?.UserId, _audit.Entry?.Role));
         return Task.CompletedTask;

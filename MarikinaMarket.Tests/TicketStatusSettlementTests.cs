@@ -1,4 +1,5 @@
 using System.Net;
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using MarikinaMarket.API.Application;
@@ -16,6 +17,41 @@ namespace MarikinaMarket.Tests;
 
 public class TicketStatusSettlementTests
 {
+    [Theory]
+    [InlineData("2026-10-15T15:59:59Z", "2026-10-15", true)]
+    [InlineData("2026-10-15T15:59:59Z", "2026-10-16", false)]
+    [InlineData("2026-10-15T16:00:00Z", "2026-10-16", true)]
+    [InlineData("2026-10-15T16:00:00Z", "2026-10-17", false)]
+    [InlineData("2026-10-15T23:59:59Z", "2026-10-16", true)]
+    [InlineData("2026-10-15T23:59:59Z", "2026-10-17", false)]
+    [InlineData("2026-10-16T00:00:00Z", "2026-10-16", true)]
+    [InlineData("2026-10-16T00:00:00Z", "2026-10-17", false)]
+    public void Service_date_uses_the_Manila_calendar_day(string utcTime, string serviceDate, bool allowed)
+    {
+        var validator = typeof(TicketService).GetMethod("ValidateCommunityServiceLog",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(validator);
+        var ticket = new Ticket
+        {
+            Description = "Community service", CommunityServiceHours = 8
+        };
+        var request = new SubmitCommunityServiceLogRequest
+        {
+            ServiceDate = DateTime.ParseExact(serviceDate, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+            HoursWorked = 1m
+        };
+        var now = DateTime.Parse(utcTime, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        var error = Record.Exception(() => validator.Invoke(null, [ticket, request, now]));
+        if (allowed)
+            Assert.Null(error);
+        else
+        {
+            var invocation = Assert.IsType<TargetInvocationException>(error);
+            var validation = Assert.IsType<InvalidRequestException>(invocation.InnerException);
+            Assert.Equal("Service date cannot be in the future.", validation.Message);
+        }
+    }
+
     [Theory]
     [InlineData(PenaltyType.CashFine, TicketStatus.Paid)]
     [InlineData(PenaltyType.CashFine, TicketStatus.Cleared)]
@@ -118,20 +154,22 @@ public class TicketStatusSettlementTests
         Assert.Equal(status, (await fixture.UpdateAsync(status)).Status);
     }
 
-    [Fact]
-    public async Task Status_endpoint_returns_400_with_settlement_message_and_200_with_snake_case_json()
+    [Theory]
+    [InlineData("HeadAdmin")]
+    [InlineData("AdminOfficer")]
+    public async Task Status_endpoint_returns_400_with_settlement_message_and_200_with_snake_case_json(string role)
     {
         var fixture = new Fixture(PenaltyType.CashFine);
         await using var host = await AuditHost.CreateAsync(services => services.AddSingleton<ITicketService>(fixture.Service));
         const string body = "{\"new_status\":\"Paid\",\"version\":7}";
-        var rejected = await host.SendAsync(HttpMethod.Patch, "/api/admin/tickets/1/update-status", body: body);
+        var rejected = await host.SendAsync(HttpMethod.Patch, "/api/admin/tickets/1/update-status", role, body);
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         using var error = JsonDocument.Parse(await rejected.Content.ReadAsStringAsync());
         Assert.Equal("Settlement proof is required before marking this ticket Paid or Cleared.", error.RootElement.GetProperty("message").GetString());
         fixture.AssertRejectedWithoutMutation();
 
         fixture.Ticket.ProofUrls = ["receipt.png"];
-        var accepted = await host.SendAsync(HttpMethod.Patch, "/api/admin/tickets/1/update-status", body: body);
+        var accepted = await host.SendAsync(HttpMethod.Patch, "/api/admin/tickets/1/update-status", role, body);
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         using var result = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
         Assert.Equal(1, result.RootElement.GetProperty("ticket_id").GetInt32());
@@ -143,6 +181,7 @@ public class TicketStatusSettlementTests
     [Theory]
     [InlineData(null, 1, "Paid", HttpStatusCode.Unauthorized)]
     [InlineData("MarketEnforcer", 1, "Paid", HttpStatusCode.Forbidden)]
+    [InlineData("MarketVendor", 1, "Paid", HttpStatusCode.Forbidden)]
     [InlineData("HeadAdmin", 2, "Paid", HttpStatusCode.NotFound)]
     [InlineData("HeadAdmin", 1, "UnknownStatus", HttpStatusCode.BadRequest)]
     public async Task Status_endpoint_reports_auth_not_found_and_invalid_status_errors(string? role, int id, string status, HttpStatusCode expected)
@@ -153,6 +192,63 @@ public class TicketStatusSettlementTests
             $"{{\"new_status\":\"{status}\",\"version\":7}}");
         Assert.Equal(expected, response.StatusCode);
         Assert.DoesNotContain("SaveChangesAsync", fixture.Calls);
+    }
+
+    [Fact]
+    public async Task Stale_status_update_returns_conflict_before_mutating_the_ticket()
+    {
+        var fixture = new Fixture(PenaltyType.CashFine);
+        fixture.Ticket.ProofUrls = ["receipt.png"];
+        await using var host = await AuditHost.CreateAsync(services => services.AddSingleton<ITicketService>(fixture.Service));
+        var response = await host.SendAsync(HttpMethod.Patch, "/api/admin/tickets/1/update-status",
+            body: "{\"new_status\":\"Paid\",\"version\":6}");
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("This ticket was updated by another user. Please refresh and try again.",
+            error.RootElement.GetProperty("message").GetString());
+        fixture.AssertRejectedWithoutMutation();
+    }
+
+    [Theory]
+    [InlineData(nameof(INotificationService.SendEmailAsync))]
+    [InlineData(nameof(INotificationService.SendPushNotificationAsync))]
+    public async Task Delivery_failure_after_commit_does_not_report_a_saved_payment_as_failed(string failedMethod)
+    {
+        var fixture = new Fixture(PenaltyType.CashFine, failedMethod);
+        fixture.Ticket.ProofUrls = ["receipt.png"];
+        fixture.Ticket.Vendor = new VendorProfile
+        {
+            BusinessId = "business", BusinessName = "Stall", QrCodeValue = "qr",
+            User = new User
+            {
+                FirstName = "Juan", LastName = "Reyes", Email = "vendor@example.invalid",
+                DateOfBirth = new DateOnly(1990, 1, 1), HouseNumber = "1", Street = "Street",
+                Barangay = "Barangay", City = "Marikina"
+            }
+        };
+        var response = await fixture.UpdateAsync(TicketStatus.Paid);
+        Assert.Equal(TicketStatus.Paid, response.Status);
+        Assert.Equal(8u, response.Version);
+        Assert.NotNull(fixture.Ticket.ResolvedAt);
+        Assert.Contains("CommitAsync", fixture.Calls);
+        Assert.Contains("SaveNotificationAsync", fixture.Calls);
+        Assert.True(fixture.Calls.IndexOf(failedMethod) > fixture.Calls.IndexOf("CommitAsync"));
+        Assert.Contains(nameof(INotificationService.SendPushNotificationAsync), fixture.Calls);
+        Assert.DoesNotContain("RollbackAsync", fixture.Calls);
+    }
+
+    [Fact]
+    public async Task Another_enforcer_cannot_view_the_saved_receipt()
+    {
+        await using var host = await VendorTicketHost.CreateAsync(configureTickets: tickets =>
+        {
+            tickets[0].PenaltyType = PenaltyType.CashFine;
+            tickets[0].ProofUrls = ["receipt.png"];
+        });
+        using var response = await host.GetAsync("/api/enforcer/tickets/101/settlement/receipt",
+            role: "MarketEnforcer", userId: "99");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(0, host.Storage.Calls);
     }
 
     [Fact]
@@ -179,14 +275,41 @@ public class TicketStatusSettlementTests
         Assert.DoesNotContain("<img src=x>", html);
     }
 
+    [Theory]
+    [InlineData(TicketStatus.Paid, "#4C8B5A")]
+    [InlineData(TicketStatus.Cleared, "#4C8B5A")]
+    [InlineData(TicketStatus.Waived, "#4C8B5A")]
+    [InlineData(TicketStatus.Contested, "#B8792F")]
+    [InlineData(TicketStatus.Overdue, "#C0392B")]
+    [InlineData(TicketStatus.Pending, "#0B2D5B")]
+    [InlineData(TicketStatus.InProgress, "#0B2D5B")]
+    public async Task Status_email_accent_matches_the_new_status(TicketStatus status, string accent)
+    {
+        var fixture = new Fixture(PenaltyType.CashFine);
+        fixture.Ticket.ProofUrls = ["receipt.png"];
+        fixture.Ticket.Vendor = new VendorProfile
+        {
+            BusinessId = "business", BusinessName = "Stall", QrCodeValue = "qr",
+            User = new User
+            {
+                FirstName = "Juan", LastName = "Reyes", Email = "vendor@example.invalid",
+                DateOfBirth = new DateOnly(1990, 1, 1), HouseNumber = "1", Street = "Street",
+                Barangay = "Barangay", City = "Marikina"
+            }
+        };
+        await fixture.UpdateAsync(status);
+        Assert.Equal(accent, Assert.Single(fixture.EmailAccents));
+    }
+
     private sealed class Fixture
     {
         public Ticket Ticket { get; }
         public TicketService Service { get; }
         public List<string> Calls { get; } = [];
         public List<string> EmailBodies { get; } = [];
+        public List<string> EmailAccents { get; } = [];
 
-        public Fixture(PenaltyType? penalty)
+        public Fixture(PenaltyType? penalty, string? failedNotification = null)
         {
             Ticket = new Ticket
             {
@@ -215,9 +338,15 @@ public class TicketStatusSettlementTests
             var notification = Proxy<INotificationService>((method, args) =>
             {
                 Calls.Add(method.Name);
+                if (method.Name == failedNotification)
+                    throw new InvalidOperationException("Simulated delivery failure.");
                 if (method.Name == nameof(INotificationService.SendEmailAsync))
+                {
                     EmailBodies.Add((string)args![2]!);
-                return method.Name == nameof(INotificationService.SendPushNotificationAsync) ? Task.FromResult(true) : Task.CompletedTask;
+                    EmailAccents.Add(args.Length > 3 ? (string)args[3]! : "#0B2D5B");
+                }
+                return method.Name is nameof(INotificationService.SendPushNotificationAsync)
+                    or nameof(INotificationService.SendPushNotificationToVendorAsync) ? Task.FromResult(true) : Task.CompletedTask;
             });
             var compliance = Proxy<IVendorComplianceScoreService>((method, _) =>
             {

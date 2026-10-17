@@ -6,6 +6,7 @@ using MarikinaMarket.API.Application.DTOs.Tickets.Request;
 using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.DTOs.Vendor.Internal;
 using MarikinaMarket.API.Application.DTOs.Vendor.Request;
+using MarikinaMarket.API.Application.DTOs.Vendor.Response;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
@@ -21,6 +22,24 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
         public TicketRepository(AppDbContext context)
         {
             _context = context;
+        }
+
+        public async Task<List<VendorDashboardTaskResponse>> GetVendorDashboardTasksAsync(int userId)
+        {
+            return await _context.Tickets.AsNoTracking()
+                .Where(ticket => ticket.Vendor!.UserId == userId && ticket.Type == ViolationType.Ticket &&
+                    (ticket.Status == TicketStatus.Pending || ticket.Status == TicketStatus.Overdue ||
+                     ticket.Status == TicketStatus.Contested || ticket.Status == TicketStatus.InProgress))
+                .OrderByDescending(ticket => ticket.IssuedAt).ThenByDescending(ticket => ticket.Id)
+                .Select(ticket => new VendorDashboardTaskResponse
+                {
+                    TicketId = ticket.Id,
+                    ControlNumber = ticket.ControlNumber,
+                    PenaltyType = ticket.PenaltyType,
+                    Status = ticket.Status,
+                    HoursRequired = ticket.CommunityServiceHours,
+                    HoursCompleted = ticket.CommunityServiceLogs.Sum(log => (decimal?)log.HoursWorked) ?? 0m
+                }).ToListAsync();
         }
 
         public async Task<List<TicketReportSummary>> GetReportSummaryAsync(
@@ -551,7 +570,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     Severity = t.HighestSeverity ?? null,
                     PenaltyType = t.PenaltyType ?? null,
                     DueDate = t.Type == ViolationType.Ticket
-                        ? t.IssuedAt.AddDays(15) : null,
+                        ? t.IssuedAt.AddDays(5) : null,
                     TotalFineAmount = t.TotalPaymentAmount ?? null,
                     TicketEvidences = t.TicketEvidences!.Select(e => e.FileKey).ToList() ?? new List<string>(),
                     Status = t.Status,
@@ -782,6 +801,11 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .AsNoTracking()
                 .Where(t => t.Type == ViolationType.Ticket &&
                     t.IssuedAt >= start && t.IssuedAt <= end)
+                .Select(t => new
+                {
+                    IssuedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(t.IssuedAt, "Asia/Manila"),
+                    t.HighestSeverity
+                })
                 .GroupBy(t => new
                 {
                     t.IssuedAt.Year,
@@ -804,6 +828,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 .AsNoTracking()
                 .Where(t => t.Type == ViolationType.Ticket &&
                     t.IssuedAt >= start && t.IssuedAt <= end)
+                .Select(t => new { IssuedAt = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(t.IssuedAt, "Asia/Manila") })
                 .GroupBy(t => new
                 {
                     DayOfWeek = (int)t.IssuedAt.DayOfWeek,
