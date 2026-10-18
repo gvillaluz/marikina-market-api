@@ -17,7 +17,7 @@ namespace MarikinaMarket.Tests;
 
 public class FullBackupE2ETests
 {
-    [Fact]
+    [FullBackupE2EFact]
     public async Task BrowserSchedulerRestartAndRestore()
     {
         var root = Environment.GetEnvironmentVariable("E2E_FULL_ROOT")!;
@@ -218,6 +218,15 @@ public class FullBackupE2ETests
             await File.WriteAllTextAsync(Path.Combine(root, "result.json"), JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true }));
             CryptographicOperations.ZeroMemory(key);
         }
+    }
+}
+
+public sealed class FullBackupE2EFactAttribute : FactAttribute
+{
+    public FullBackupE2EFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("E2E_FULL_ROOT")))
+            Skip = "Set E2E_FULL_ROOT explicitly to run the disposable local backup and restore drill.";
     }
 }
 

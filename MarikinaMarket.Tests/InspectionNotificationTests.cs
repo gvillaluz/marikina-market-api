@@ -281,7 +281,7 @@ public class InspectionNotificationTests
             });
             Service = new TicketService(tickets, ordinances, vendorLookup, unit, storage, notifications, compliance);
         }
-        private Task<Ticket> AddTicket(Ticket ticket) { ticket.Id = 11; CreatedTicket = ticket; return Task.FromResult(ticket); }
+        private Task<Ticket> AddTicket(Ticket ticket) { ticket.Id = 11; ticket.Version = 7; CreatedTicket = ticket; return Task.FromResult(ticket); }
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
             => FailNotificationSave && NotificationsSaved.Count > 0
                 ? Task.FromException<int>(new InvalidOperationException("Notification save failed")) : Task.FromResult(1);

@@ -44,7 +44,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             }
             catch (Exception ex) when (ex is DbUpdateConcurrencyException
                 or PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
-                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } })
+                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } }
+                or InvalidOperationException { InnerException: DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } } })
             {
                 await RollbackAsync();
                 throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
@@ -88,7 +89,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             }
             catch (Exception ex) when (ex is DbUpdateConcurrencyException
                 or PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
-                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } })
+                or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } }
+                or InvalidOperationException { InnerException: DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } } })
             {
                 throw new ConcurrencyConflictException("The record was changed by another request. Refresh and try again.");
             }
