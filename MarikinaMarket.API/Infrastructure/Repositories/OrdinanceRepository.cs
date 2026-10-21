@@ -24,6 +24,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                 {
                     OrdinanceId = o.Id,
                     OrdinanceNo = o.OrdinanceNo,
+                    Series = o.Series,
                     Code = o.MarketCode,
                     Title = o.Title,
                     Category = o.Category,

@@ -117,7 +117,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         [HttpGet("inspections")]
         public async Task<ActionResult<PageResponse<InspectionSummaryResponse>>> GetAllInspectionsByEnforcerId(
             [FromQuery] int offset = 0,
-            [FromQuery] ViolationType type = ViolationType.Warning,
+            [FromQuery] ViolationType? type = null,
             [FromQuery] string search = ""
             )
         {
@@ -134,7 +134,7 @@ namespace MarikinaMarket.API.Presentation.Controllers
         [HttpGet]
         public async Task<ActionResult<PageResponse<TicketSummaryResponse>>> GetAllTicketsByEnforcerId(
             [FromQuery] int offset = 0,
-            [FromQuery] TicketStatus status = TicketStatus.Pending,
+            [FromQuery] TicketStatus? status = null,
             [FromQuery] string search = ""
             )
         {

@@ -185,6 +185,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                         TicketId = t.Id,
                         OrdinanceId = tv.OrdinanceId,
                         OrdinanceNo = tv.Ordinance!.OrdinanceNo,
+                        Series = tv.Ordinance.Series,
                         OrdinanceCode = tv.Ordinance.MarketCode,
                         OffenseCount = tv.OffenseCount,
                         PenaltyAmount = tv.PenaltyAmount
@@ -304,12 +305,12 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             int enforcerId, 
             int offset, 
             int limit,
-            ViolationType type,
+            ViolationType? type,
             string search
             )
         {
             var query =  _context.Tickets
-                .Where(t => t.EnforcerId == enforcerId && t.Type == type).AsQueryable();
+                .Where(t => t.EnforcerId == enforcerId && (!type.HasValue || t.Type == type)).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -343,7 +344,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     Type = t.Type,
                     Status = t.Status,
                     Severity = t.HighestSeverity,
-                    Ordinances = t.TicketViolations.Select(tv => tv.Ordinance!.OrdinanceNo).ToList(),
+                    Ordinances = t.TicketViolations.OrderBy(tv => tv.Id)
+                        .Select(tv => "Ord No. " + tv.Ordinance!.OrdinanceNo + ", Series of " + tv.Ordinance.Series).ToList(),
                     IssuedAt = t.IssuedAt,
                     UpdatedAt = t.UpdatedAt
                 }).ToListAsync();
@@ -353,13 +355,13 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
             int enforcerId,
             int offset,
             int limit,
-            TicketStatus status,
+            TicketStatus? status,
             string search
             )
         {
             var query = _context.Tickets
                 .Where(t => t.EnforcerId == enforcerId 
-                            && t.Status == status
+                            && (!status.HasValue || t.Status == status)
                             && t.Type == ViolationType.Ticket)
                 .AsQueryable();
 
@@ -388,6 +390,8 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     VendorType = t.Vendor.Type,
                     BusinessId = t.Vendor.BusinessId,
                     StallNumber = t.Vendor.StallNumber,
+                    OrdinanceNames = t.TicketViolations.OrderBy(tv => tv.Id)
+                        .Select(tv => "Ord No. " + tv.Ordinance!.OrdinanceNo + ", Series of " + tv.Ordinance.Series).ToList(),
                     EnforcerId = t.EnforcerId,
                     Status = t.Status,
                     IssuedAt = t.IssuedAt,
@@ -547,6 +551,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                     EnforcerId = t.EnforcerId,
                     ControlNumber = t.ControlNumber ?? null,
                     Type = t.Type,
+                    VendorType = t.Vendor!.Type,
                     BusinessId = t.Vendor!.BusinessId,
                     StallNumber = t.Vendor!.StallNumber,
                     BusinessName = t.Vendor.BusinessName,
@@ -559,6 +564,7 @@ namespace MarikinaMarket.API.Infrastructure.Repositories
                         TicketId = t.Id,
                         OrdinanceId = tv.OrdinanceId,
                         OrdinanceNo = tv.Ordinance!.OrdinanceNo,
+                        Series = tv.Ordinance.Series,
                         OrdinanceCode = tv.Ordinance.MarketCode,
                         OffenseCount = tv.OffenseCount,
                         PenaltyAmount = tv.PenaltyAmount

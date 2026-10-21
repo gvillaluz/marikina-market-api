@@ -6,6 +6,7 @@ namespace MarikinaMarket.API.Application.DTOs.Ordinance.Internal
     {
         public int OrdinanceId { get; set; }
         public required string OrdinanceNo { get; set; }
+        public string Series { get; set; } = "";
         public required string Code { get; set; }
         public required string Title { get; set; }
         public ViolationCategory Category { get; set; }

@@ -23,6 +23,16 @@ namespace MarikinaMarket.Tests;
 public class InspectionNotificationTests
 {
     [Theory]
+    [InlineData(ViolationType.Warning)]
+    [InlineData(ViolationType.Ticket)]
+    public async Task Newly_created_inspection_returns_number_and_series_labels(ViolationType type)
+    {
+        using var fixture = new Fixture();
+        var response = await fixture.Service.CreateTicketAsync(fixture.Request(type));
+        Assert.Equal(new[] { "Ord No. 011, Series of 2014" }, response.OrdinanceNames);
+    }
+
+    [Theory]
     [InlineData(ViolationType.Warning, false)]
     [InlineData(ViolationType.Ticket, false)]
     [InlineData(ViolationType.Warning, true)]
@@ -258,7 +268,7 @@ public class InspectionNotificationTests
             }));
             var ordinances = ReviewBoundaryProxy.Create<IOrdinanceRepository>((method, args) => Task.FromResult(new List<OrdinanceOffenseSummary>
             {
-                new() { OrdinanceId = 1, OrdinanceNo = "011", Code = "MKT-001", Title = "Market ID",
+                new() { OrdinanceId = 1, OrdinanceNo = "011", Series = "2014", Code = "MKT-001", Title = "Market ID",
                     Category = ViolationCategory.Licensing, PenaltyTiers = [new() { OffenseNumber = 1, Severity = Severity.Minor, PenaltyAmount = 500m }] }
             }));
             var unit = ReviewBoundaryProxy.Create<IUnitOfWork>((method, args) =>

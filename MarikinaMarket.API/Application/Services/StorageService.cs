@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -111,6 +112,8 @@ namespace MarikinaMarket.API.Application.Services
             var (s3Client, bucketName) = GetClientAndBucket(B2BucketType.Evidence);
 
             using var stream = file.OpenReadStream();
+            var md5Digest = Convert.ToBase64String(await MD5.HashDataAsync(stream));
+            stream.Position = 0;
 
             var sw = Stopwatch.StartNew();
 
@@ -122,6 +125,7 @@ namespace MarikinaMarket.API.Application.Services
                 ContentType = file.ContentType,
                 ObjectLockMode = ObjectLockMode.Compliance,
                 ObjectLockRetainUntilDate = DateTime.UtcNow.AddDays(retentionDays),
+                MD5Digest = md5Digest,
                 UseChunkEncoding = false,
                 DisablePayloadSigning = true
             });

@@ -518,7 +518,7 @@ namespace MarikinaMarket.API.Application.Services
                         EnforcerId = newWarningTicket.EnforcerId,
                         Type = newWarningTicket.Type,
                         Severity = null,
-                        OrdinanceNames = ordinanceFineSummary.Breakdown.Select(o => o.OrdinanceNo).ToList(),
+                        OrdinanceNames = ordinanceWithTiers.Select(o => $"Ord No. {o.OrdinanceNo}, Series of {o.Series}").ToList(),
                         Status = newWarningTicket!.Status,
                         IssuedAt = newWarningTicket.IssuedAt,
                         OverdueDate = null,
@@ -653,7 +653,7 @@ namespace MarikinaMarket.API.Application.Services
                     EnforcerId = newTicket.EnforcerId,
                     Type = newTicket.Type,
                     Severity = newTicket.HighestSeverity,
-                    OrdinanceNames = ordinanceFineSummary.Breakdown.Select(o => o.OrdinanceNo).ToList(),
+                    OrdinanceNames = ordinanceWithTiers.Select(o => $"Ord No. {o.OrdinanceNo}, Series of {o.Series}").ToList(),
                     Status = newTicket.Status,
                     IssuedAt = newTicket.IssuedAt,
                     UpdatedAt = newTicket.UpdatedAt,
@@ -730,7 +730,7 @@ namespace MarikinaMarket.API.Application.Services
             };
         }
 
-        public async Task<PageResponse<InspectionSummaryResponse>> GetInspectionsByEnforcerIdAsync(int enforcerId, int offset, ViolationType type, string search)
+        public async Task<PageResponse<InspectionSummaryResponse>> GetInspectionsByEnforcerIdAsync(int enforcerId, int offset, ViolationType? type, string search)
         {
             offset = Math.Max(offset, 0);
 
@@ -861,7 +861,7 @@ namespace MarikinaMarket.API.Application.Services
         public async Task<PageResponse<TicketSummaryResponse>> GetTicketsByEnforcerIdAsync(
             int enforcerId,
             int offset,
-            TicketStatus status,
+            TicketStatus? status,
             string search
             )
         {
@@ -888,6 +888,7 @@ namespace MarikinaMarket.API.Application.Services
                 StallNumber = t.StallNumber,
                 EnforcerId = t.EnforcerId,
                 Status = t.Status ?? TicketStatus.Pending,
+                OrdinanceNames = t.OrdinanceNames,
                 IssuedAt = t.IssuedAt,
                 UpdatedAt = t.UpdatedAt,
                 OverdueDate = t.IssuedAt.AddDays(5)

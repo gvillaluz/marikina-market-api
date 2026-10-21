@@ -7,6 +7,7 @@ using MarikinaMarket.API.Application.DTOs.Tickets.Response;
 using MarikinaMarket.API.Application.Interfaces.Repositories;
 using MarikinaMarket.API.Application.Interfaces.Services;
 using MarikinaMarket.API.Application.Services;
+using MarikinaMarket.API.Domain.Entities;
 using MarikinaMarket.API.Domain.Enums;
 using MarikinaMarket.API.Infrastructure.Persistence;
 using MarikinaMarket.API.Infrastructure.Repositories;
@@ -19,6 +20,77 @@ namespace MarikinaMarket.Tests;
 
 public class AdminTicketDetailTests
 {
+    [Theory]
+    [InlineData(VendorType.Public)]
+    [InlineData(VendorType.Private)]
+    public async Task Repository_preserves_vendor_type_in_admin_ticket_detail(VendorType vendorType)
+    {
+        var user = new User
+        {
+            FirstName = "Juan", LastName = "Santos", DateOfBirth = new DateOnly(1990, 1, 1),
+            HouseNumber = "1", Street = "Test Street", Barangay = "Test Barangay", City = "Marikina"
+        };
+        var ticket = new Ticket
+        {
+            Id = 42, Description = "Blocked market walkway", Type = ViolationType.Ticket,
+            Vendor = new VendorProfile
+            {
+                Type = vendorType, BusinessId = "BUS-0042", BusinessName = "Market Goods",
+                QrCodeValue = "synthetic-vendor-42", StallNumber = vendorType == VendorType.Public ? "A-12" : null,
+                User = user
+            },
+            MarketSection = new MarketSection { Name = "Dry Goods", Description = "Dry goods section" },
+            Enforcer = user
+        };
+        using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().Options);
+        context.Tickets = new AccountDatabaseSet<Ticket>([ticket]);
+
+        var detail = await new TicketRepository(context).GetAdminTicketDetailAsync(42);
+
+        Assert.NotNull(detail);
+        Assert.Equal(vendorType, detail.VendorType);
+        Assert.Equal(ticket.Vendor.StallNumber, detail.StallNumber);
+    }
+
+    [Theory]
+    [InlineData(VendorType.Public, "Public")]
+    [InlineData(VendorType.Private, "Private")]
+    public async Task Detail_endpoint_serializes_vendor_type(VendorType vendorType, string expected)
+    {
+        var fixture = new Fixture();
+        fixture.Ticket.VendorType = vendorType;
+        await using var host = await AuditHost.CreateAsync(services => services.AddSingleton<ITicketService>(fixture.Service));
+
+        using var response = await host.SendAsync(HttpMethod.Get, "/api/admin/tickets/42");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expected, json.RootElement.GetProperty("vendor_type").GetString());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Ticket_detail_projection_includes_ordinance_series(bool admin)
+    {
+        var capture = new CaptureCommand();
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=unused;Database=model_only;Username=model_only")
+            .UseSnakeCaseNamingConvention()
+            .AddInterceptors(new SuppressConnection(), capture).Options;
+        await using var context = new AppDbContext(options);
+        var repository = new TicketRepository(context);
+
+        await Assert.ThrowsAsync<CapturedCommandException>(async () =>
+        {
+            if (admin) await repository.GetAdminTicketDetailAsync(42);
+            else await repository.GetTicketDetailAsync(42);
+        });
+
+        Assert.NotNull(capture.Sql);
+        Assert.Contains(".series", capture.Sql);
+    }
+
     [Fact]
     public async Task Detail_signs_all_proofs_in_one_batch_and_preserves_all_service_logs()
     {
